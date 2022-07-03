@@ -53,6 +53,10 @@ void tele_usb_disk() {
 
     uint8_t lun_state = 0;
 
+    // We assume that there is one and only one available LUN, otherwise it is
+    // not safe to iterate through all possible LUN even after we finish
+    // writing saving and loading scenes.
+
     for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
         // print_dbg("\r\nlun: ");
         // print_dbg_ulong(lun);
@@ -70,8 +74,31 @@ void tele_usb_disk() {
             // ui_test_finish(false); // Test fail
             continue;
         }
+
+        // Because we set `lun_state` to 0 at start and iterate through LUN's
+        // monotonically, there is no way that this test can ever fail.
+        //
+        // In fact, all of the `lun_state` code seems to have been dead code
+        // since it was first checked in.
+
         // Check if LUN has been already tested
         if (lun_state & (1 << lun)) { continue; }
+
+        // Print current scene number and name
+        //
+        // Bug: it seems that the scene number is not recorded anywhere.  We
+        // have only the current preset (`preset_select`), which can be chenged
+        // in the preset read screen without actually changing the current
+        // scene.
+
+        {
+            char s[32];
+            itoa(preset_select, s, 10);
+            region_fill(&line[0], 0);
+            font_string_region_clip_right(&line[0], s, 126, 0, 0xa, 0);
+            font_string_region_clip(&line[0], scene_text[0], 2, 0, 0xa, 0);
+            region_draw(&line[0]);
+        }
 
         // WRITE SCENES
         char filename[13];
@@ -79,9 +106,11 @@ void tele_usb_disk() {
 
         print_dbg("\r\nwriting scenes");
         strcpy(text_buffer, "WRITE");
-        region_fill(&line[0], 0);
-        font_string_region_clip_tab(&line[0], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+        region_fill(&line[1], 0);
+        // The `..._tab` variant shifts to column 48 when it encounters a `|`
+        // character.  Is this desired behavior?
+        font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[1]);
 
         for (int i = 0; i < SCENE_SLOTS; i++) {
             scene_state_t scene;
@@ -92,9 +121,9 @@ void tele_usb_disk() {
 
             strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                        // buffer is large enough!
-            region_fill(&line[0], 0);
-            font_string_region_clip_tab(&line[0], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[0]);
+            region_fill(&line[1], 0);
+            font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
+            region_draw(&line[1]);
 
             flash_read(i, &scene, &text, 1, 1, 1);
 
@@ -151,9 +180,9 @@ void tele_usb_disk() {
         print_dbg("\r\nreading scenes...");
 
         strcpy(text_buffer, "READ");
-        region_fill(&line[1], 0);
-        font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[1]);
+        region_fill(&line[2], 0);
+        font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[2]);
 
         for (int i = 0; i < SCENE_SLOTS; i++) {
             scene_state_t scene;
@@ -163,9 +192,9 @@ void tele_usb_disk() {
 
             strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                        // buffer is large enough!
-            region_fill(&line[1], 0);
-            font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[1]);
+            region_fill(&line[2], 0);
+            font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
+            region_draw(&line[2]);
             if (nav_filelist_findname(filename, 0)) {
                 print_dbg("\r\nfound: ");
                 print_dbg(filename);

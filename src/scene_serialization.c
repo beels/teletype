@@ -127,6 +127,10 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
     char input[32];
     memset(input, 0, sizeof(input));
 
+    // -1 is used as an exit/error flag instead of simply calling `return`.
+    // Lack of return code or finalization code means we could end up with a
+    // partially-deserialized scene.
+
     while (!stream->eof(stream->data) && s != -1) {
         c = toupper(stream->read_char(stream->data));
         // stream->print_dbg_char(c);
