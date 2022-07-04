@@ -33,8 +33,6 @@ bool tele_usb_eof(void* self_data);
 void tele_usb_disk_init(void);
 void tele_usb_disk_finish(void);
 
-static u8 flags;
-
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
 }
@@ -144,7 +142,6 @@ void tele_usb_disk_init() {
     assign_msc_event_handlers();
 
     // disable timers
-    // flags = irqs_pause();
     default_timers_enabled = false;
 
     // clear screen
@@ -161,7 +158,6 @@ void tele_usb_disk_finish() {
     // renable teletype
     set_mode(M_LIVE);
     assign_main_event_handlers();
-    // irqs_resume(flags);
     default_timers_enabled = true;
 }
 
