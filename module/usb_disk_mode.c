@@ -25,16 +25,22 @@
 #include "uhi_msc_mem.h"
 #include "usb_protocol_msc.h"
 
+// Change to 1 to enable debug "fail" output from early test code.
+#define USB_DISK_TEST 0
+
 // Local functions for usb filesystem serialization
-void tele_usb_putc(void* self_data, uint8_t c);
-void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
-uint16_t tele_usb_getc(void* self_data);
-bool tele_usb_eof(void* self_data);
-void tele_usb_disk_init(void);
-void tele_usb_disk_finish(void);
-void tele_usb_exec(void);
-bool tele_usb_parse_target_filename(char *buffer, uint8_t preset);
-void tele_usb_disk_render_menu_line(int item, int line_no, int marker);
+static void tele_usb_putc(void* self_data, uint8_t c);
+static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
+static uint16_t tele_usb_getc(void* self_data);
+static bool tele_usb_eof(void* self_data);
+static void tele_usb_disk_init(void);
+static void tele_usb_disk_finish(void);
+static void tele_usb_exec(void);
+static bool tele_usb_parse_target_filename(char *buffer, uint8_t preset);
+static void tele_usb_disk_render_menu_line(int item, int line_no, int marker);
+static void tele_usb_disk_write_file(char *filename, int preset);
+static void tele_usb_disk_read_file(char *filename, int preset);
+static void tele_usb_disk_write_and_read(void);
 
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
@@ -108,74 +114,13 @@ void tele_usb_exec() {
     switch (menu_selection) {
         case 0: {
             // Write to file
-            scene_state_t scene;
-            ss_init(&scene);
-
-            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-            flash_read(preset_select, &scene, &text, 1, 1, 1);
-
-            if (!nav_file_create((FS_STRING)filename_buffer)) {
-                if (fs_g_status != FS_ERR_FILE_EXIST) {
-                    if (fs_g_status == FS_LUN_WP) {
-                        // Test can be done only on no write protected
-                        // device
-                        break;
-                    }
-                    print_dbg("\r\nfail");
-                    break;
-                }
-            }
-
-            if (!file_open(FOPEN_MODE_W)) {
-                if (fs_g_status == FS_LUN_WP) {
-                    // Test can be done only on no write protected
-                    // device
-                    break;
-                }
-                print_dbg("\r\nfail");
-                break;
-            }
-
-            tt_serializer_t tele_usb_writer;
-            tele_usb_writer.write_char = &tele_usb_putc;
-            tele_usb_writer.write_buffer = &tele_usb_write_buf;
-            tele_usb_writer.print_dbg = &print_dbg;
-            tele_usb_writer.data =
-                NULL;  // asf disk i/o holds state, no handles needed
-            serialize_scene(&tele_usb_writer, &scene, &text);
-
-            file_close();
+            tele_usb_disk_write_file(filename_buffer, preset_select);
             nav_filelist_reset();
             nav_exit();
         } break;
         case 1: {
             // Read from file
-            scene_state_t scene;
-            ss_init(&scene);
-            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-            if (nav_filelist_findname(filename_buffer, 0)) {
-                print_dbg("\r\nfound: ");
-                print_dbg(filename_buffer);
-                if (!file_open(FOPEN_MODE_R))
-                    print_dbg("\r\ncan't open");
-                else {
-                    tt_deserializer_t tele_usb_reader;
-                    tele_usb_reader.read_char = &tele_usb_getc;
-                    tele_usb_reader.eof = &tele_usb_eof;
-                    tele_usb_reader.print_dbg = &print_dbg;
-                    tele_usb_reader.data =
-                        NULL;  // asf disk i/o holds state, no handles needed
-                    deserialize_scene(&tele_usb_reader, &scene, &text);
-
-                    file_close();
-                    flash_write(preset_select, &scene, &text);
-                }
-            }
-
+            tele_usb_disk_read_file(filename_buffer, preset_select);
             nav_filelist_reset();
             nav_exit();
         } break;
@@ -189,7 +134,7 @@ void tele_usb_exec() {
             }
 
             // read/write files
-            tele_usb_disk_write_and_save();
+            tele_usb_disk_write_and_read();
         } break;
         case 3: {
             // Exit
@@ -318,10 +263,12 @@ void tele_usb_disk() {
         // Mount drive
         nav_drive_set(lun);
         if (!nav_partition_mount()) {
+#if USB_DISK_TEST == 1
             if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
                 continue;
             }
             print_dbg("\r\nfail");
+#endif
             continue;
         }
 
@@ -369,67 +316,98 @@ void tele_usb_disk() {
     }
 }
 
-void tele_usb_disk_write_and_save() {
-    char text_buffer[40];
+void tele_usb_disk_write_file(char *filename, int preset) {
+    scene_state_t scene;
+    ss_init(&scene);
 
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    flash_read(preset, &scene, &text, 1, 1, 1);
+
+    if (!nav_file_create((FS_STRING)filename)) {
+        if (fs_g_status != FS_ERR_FILE_EXIST) {
+#if USB_DISK_TEST == 1
+            if (fs_g_status == FS_LUN_WP) {
+                // Test can be done only on no write protected
+                // device
+                return;
+            }
+            print_dbg("\r\nfail");
+#endif
+            return;
+        }
+    }
+
+    if (!file_open(FOPEN_MODE_W)) {
+#if USB_DISK_TEST == 1
+        if (fs_g_status == FS_LUN_WP) {
+            // Test can be done only on no write protected
+            // device
+            return;
+        }
+        print_dbg("\r\nfail");
+#endif
+        return;
+    }
+
+    tt_serializer_t tele_usb_writer;
+    tele_usb_writer.write_char = &tele_usb_putc;
+    tele_usb_writer.write_buffer = &tele_usb_write_buf;
+    tele_usb_writer.print_dbg = &print_dbg;
+    tele_usb_writer.data =
+        NULL;  // asf disk i/o holds state, no handles needed
+    serialize_scene(&tele_usb_writer, &scene, &text);
+
+    file_close();
+}
+
+void tele_usb_disk_read_file(char *filename, int preset) {
+    scene_state_t scene;
+    ss_init(&scene);
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    if (nav_filelist_findname((FS_STRING)filename, 0)) {
+        // print_dbg("\r\nfound: ");
+        // print_dbg(filename_buffer);
+        if (!file_open(FOPEN_MODE_R))
+            print_dbg("\r\ncan't open");
+        else {
+            tt_deserializer_t tele_usb_reader;
+            tele_usb_reader.read_char = &tele_usb_getc;
+            tele_usb_reader.eof = &tele_usb_eof;
+            tele_usb_reader.print_dbg = &print_dbg;
+            tele_usb_reader.data =
+                NULL;  // asf disk i/o holds state, no handles needed
+            deserialize_scene(&tele_usb_reader, &scene, &text);
+
+            file_close();
+            flash_write(preset, &scene, &text);
+        }
+    }
+}
+
+void tele_usb_disk_write_and_read() {
     // WRITE SCENES
+    char text_buffer[40];
     char filename[13];
     strcpy(filename, "tt00s.txt");
 
     print_dbg("\r\nwriting scenes");
     strcpy(text_buffer, "WRITE");
-    region_fill(&line[2], 0);
-    // The `..._tab` variant shifts to column 48 when it encounters a `|`
-    // character.  Is this desired behavior?
-    font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[2]);
+    region_fill(&line[0], 0);
+    font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+    region_draw(&line[0]);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
-        region_fill(&line[2], 0);
-        font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[2]);
+        region_fill(&line[0], 0);
+        font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[0]);
 
-        flash_read(i, &scene, &text, 1, 1, 1);
-
-        if (!nav_file_create((FS_STRING)filename)) {
-            if (fs_g_status != FS_ERR_FILE_EXIST) {
-                if (fs_g_status == FS_LUN_WP) {
-                    // Test can be done only on no write protected
-                    // device
-                    continue;
-                }
-                print_dbg("\r\nfail");
-                continue;
-            }
-        }
-
-        if (!file_open(FOPEN_MODE_W)) {
-            if (fs_g_status == FS_LUN_WP) {
-                // Test can be done only on no write protected
-                // device
-                continue;
-            }
-            print_dbg("\r\nfail");
-            continue;
-        }
-
-        tt_serializer_t tele_usb_writer;
-        tele_usb_writer.write_char = &tele_usb_putc;
-        tele_usb_writer.write_buffer = &tele_usb_write_buf;
-        tele_usb_writer.print_dbg = &print_dbg;
-        tele_usb_writer.data =
-            NULL;  // asf disk i/o holds state, no handles needed
-        serialize_scene(&tele_usb_writer, &scene, &text);
-
-        file_close();
+        tele_usb_disk_write_file(filename, i);
 
         if (filename[3] == '9') {
             filename[3] = '0';
@@ -449,9 +427,9 @@ void tele_usb_disk_write_and_save() {
     print_dbg("\r\nreading scenes...");
 
     strcpy(text_buffer, "READ");
-    region_fill(&line[3], 0);
-    font_string_region_clip_tab(&line[3], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[3]);
+    region_fill(&line[1], 0);
+    font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
+    region_draw(&line[1]);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
         scene_state_t scene;
@@ -461,9 +439,9 @@ void tele_usb_disk_write_and_save() {
 
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
-        region_fill(&line[3], 0);
-        font_string_region_clip_tab(&line[3], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[3]);
+        region_fill(&line[1], 0);
+        font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[1]);
         if (nav_filelist_findname(filename, 0)) {
             print_dbg("\r\nfound: ");
             print_dbg(filename);
