@@ -266,10 +266,6 @@ void refreshTimer_callback(void* o) {
 }
 
 void keyTimer_callback(void* o) {
-    if (! default_timers_enabled) {
-        return;
-    }
-
     event_t e = {.type = kEventKeyTimer, .data = 0 };
     event_post(&e);
 }
@@ -743,6 +739,7 @@ void assign_msc_event_handlers(void) {
     // a UI with a memory stick
 
     app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
+    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
 }
 
 // app event loop

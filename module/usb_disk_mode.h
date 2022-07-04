@@ -9,5 +9,6 @@
 void tele_usb_disk(void);
 void tele_usb_disk_write_and_save(void);
 void tele_usb_disk_handler_Front(int32_t);
+void tele_usb_disk_handler_KeyTimer(int32_t data);
 
 #endif

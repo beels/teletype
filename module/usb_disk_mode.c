@@ -51,9 +51,92 @@ bool tele_usb_eof(void* self_data) {
     return file_eof() != 0;
 }
 
+static int front_counter = 0;
+static int key_counter = 0;
+static int action_counter = 0;
+static bool long_press = false;
+
 void tele_usb_disk_handler_Front(int32_t data) {
-    tele_usb_disk_write_and_save();
-    tele_usb_disk_finish();
+    ++front_counter;
+
+    char text_buffer[40];
+
+    region_fill(&line[2], 0);
+
+    strcpy(text_buffer, "Front: ");
+    font_string_region_clip(&line[2], text_buffer, 2, 0, 0xa, 0);
+
+    u8 pos = font_string_position(text_buffer, strlen(text_buffer));
+    itoa(front_counter, text_buffer, 10);
+    font_string_region_clip(&line[2], text_buffer, pos + 2, 0, 0xa, 0);
+
+    pos += font_string_position(text_buffer, strlen(text_buffer));
+    pos += font_string_position(" ", 1);
+    itoa(data, text_buffer, 10);
+    font_string_region_clip(&line[2], text_buffer, pos + 2, 0, 0xa, 0);
+
+    region_draw(&line[2]);
+
+    if (0 == data) {
+        // button down; start timer
+        key_counter = 5;
+    }
+    else {
+        // button up; cancel timer
+        key_counter = 0;
+
+        if (long_press) {
+            // tele_usb_disk_write_and_save();
+            long_press = false;
+
+            region_fill(&line[3], 0);
+
+            strcpy(text_buffer, "Write/Save");
+            font_string_region_clip(&line[3], text_buffer, 2, 0, 0xa, 0);
+            region_draw(&line[3]);
+
+            action_counter = 3;
+        }
+        else {
+            // do nothing
+        }
+    }
+
+    // tele_usb_disk_finish();
+}
+
+void tele_usb_disk_handler_KeyTimer(int32_t data) {
+    if (0 < key_counter) {
+        key_counter--;
+    }
+
+    if (1 == key_counter) {
+        // long press action
+        key_counter = 0;
+
+        long_press = true;
+
+        char text_buffer[40];
+
+        region_fill(&line[3], 0);
+
+        strcpy(text_buffer, "Long press.");
+        font_string_region_clip(&line[3], text_buffer, 2, 0, 0xa, 0);
+
+        region_draw(&line[3]);
+    }
+
+    if (0 < action_counter) {
+        action_counter--;
+    }
+
+    if (1 == action_counter) {
+        // long press action completion
+        action_counter = 0;
+
+        tele_usb_disk_finish();
+    }
+
 }
 
 void tele_usb_disk_init() {
@@ -69,6 +152,9 @@ void tele_usb_disk_init() {
         region_fill(&line[i], 0);
         region_draw(&line[i]);
     }
+
+    front_counter = 0;
+    key_counter = 0;
 }
 
 void tele_usb_disk_finish() {
