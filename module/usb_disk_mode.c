@@ -10,6 +10,7 @@
 
 // libavr32
 #include "font.h"
+#include "interrupts.h"
 #include "region.h"
 #include "util.h"
 
@@ -29,6 +30,10 @@ void tele_usb_putc(void* self_data, uint8_t c);
 void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
 uint16_t tele_usb_getc(void* self_data);
 bool tele_usb_eof(void* self_data);
+void tele_usb_disk_init(void);
+void tele_usb_disk_finish(void);
+
+static u8 flags;
 
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
@@ -46,12 +51,40 @@ bool tele_usb_eof(void* self_data) {
     return file_eof() != 0;
 }
 
+void tele_usb_disk_handler_Front(int32_t data) {
+    tele_usb_disk_write_and_save();
+    tele_usb_disk_finish();
+}
+
+void tele_usb_disk_init() {
+    // disable event handlers while doing USB write
+    assign_msc_event_handlers();
+
+    // disable timers
+    // flags = irqs_pause();
+    default_timers_enabled = false;
+
+    // clear screen
+    for (size_t i = 0; i < 8; i++) {
+        region_fill(&line[i], 0);
+        region_draw(&line[i]);
+    }
+}
+
+void tele_usb_disk_finish() {
+    // renable teletype
+    set_mode(M_LIVE);
+    assign_main_event_handlers();
+    // irqs_resume(flags);
+    default_timers_enabled = true;
+}
+
 // usb disk mode entry point
 void tele_usb_disk() {
     char text_buffer[40];
     print_dbg("\r\nusb");
 
-    uint8_t lun_state = 0;
+    tele_usb_disk_init();
 
     // We assume that there is one and only one available LUN, otherwise it is
     // not safe to iterate through all possible LUN even after we finish
@@ -65,24 +98,11 @@ void tele_usb_disk() {
         nav_drive_set(lun);
         if (!nav_partition_mount()) {
             if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
-                // The test can not be done, if LUN is not present
-                lun_state &= ~(1 << lun);  // LUN test reseted
                 continue;
             }
-            lun_state |= (1 << lun);  // LUN test is done.
             print_dbg("\r\nfail");
-            // ui_test_finish(false); // Test fail
             continue;
         }
-
-        // Because we set `lun_state` to 0 at start and iterate through LUN's
-        // monotonically, there is no way that this test can ever fail.
-        //
-        // In fact, all of the `lun_state` code seems to have been dead code
-        // since it was first checked in.
-
-        // Check if LUN has been already tested
-        if (lun_state & (1 << lun)) { continue; }
 
         // Print current scene number and name
         //
@@ -92,137 +112,152 @@ void tele_usb_disk() {
         // scene.
 
         {
-            char s[32];
-            itoa(preset_select, s, 10);
+            itoa(preset_select, text_buffer, 10);
+
             region_fill(&line[0], 0);
-            font_string_region_clip_right(&line[0], s, 126, 0, 0xa, 0);
-            font_string_region_clip(&line[0], scene_text[0], 2, 0, 0xa, 0);
+            font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+            u8 pos = font_string_position(text_buffer, strlen(text_buffer));
+            pos += font_string_position(" ", 1);
+            font_string_region_clip(&line[0],
+                                    flash_scene_text(preset_select, 0),
+                                    pos + 2, 0, 0xa, 0);
             region_draw(&line[0]);
         }
 
-        // WRITE SCENES
-        char filename[13];
-        strcpy(filename, "tt00s.txt");
+        {
+            strcpy(text_buffer, "PRESS TO CONFIRM");
 
-        print_dbg("\r\nwriting scenes");
-        strcpy(text_buffer, "WRITE");
-        region_fill(&line[1], 0);
-        // The `..._tab` variant shifts to column 48 when it encounters a `|`
-        // character.  Is this desired behavior?
-        font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[1]);
-
-        for (int i = 0; i < SCENE_SLOTS; i++) {
-            scene_state_t scene;
-            ss_init(&scene);
-
-            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-            strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                       // buffer is large enough!
             region_fill(&line[1], 0);
-            font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
+            font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
             region_draw(&line[1]);
+        }
 
-            flash_read(i, &scene, &text, 1, 1, 1);
+        break;
+    }
+}
 
-            if (!nav_file_create((FS_STRING)filename)) {
-                if (fs_g_status != FS_ERR_FILE_EXIST) {
-                    if (fs_g_status == FS_LUN_WP) {
-                        // Test can be done only on no write protected
-                        // device
-                        continue;
-                    }
-                    lun_state |= (1 << lun);  // LUN test is done.
-                    print_dbg("\r\nfail");
-                    continue;
-                }
-            }
+void tele_usb_disk_write_and_save() {
+    char text_buffer[40];
 
-            if (!file_open(FOPEN_MODE_W)) {
+    // WRITE SCENES
+    char filename[13];
+    strcpy(filename, "tt00s.txt");
+
+    print_dbg("\r\nwriting scenes");
+    strcpy(text_buffer, "WRITE");
+    region_fill(&line[2], 0);
+    // The `..._tab` variant shifts to column 48 when it encounters a `|`
+    // character.  Is this desired behavior?
+    font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
+    region_draw(&line[2]);
+
+    for (int i = 0; i < SCENE_SLOTS; i++) {
+        scene_state_t scene;
+        ss_init(&scene);
+
+        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
+                                   // buffer is large enough!
+        region_fill(&line[2], 0);
+        font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[2]);
+
+        flash_read(i, &scene, &text, 1, 1, 1);
+
+        if (!nav_file_create((FS_STRING)filename)) {
+            if (fs_g_status != FS_ERR_FILE_EXIST) {
                 if (fs_g_status == FS_LUN_WP) {
                     // Test can be done only on no write protected
                     // device
                     continue;
                 }
-                lun_state |= (1 << lun);  // LUN test is done.
                 print_dbg("\r\nfail");
                 continue;
             }
+        }
 
-            tt_serializer_t tele_usb_writer;
-            tele_usb_writer.write_char = &tele_usb_putc;
-            tele_usb_writer.write_buffer = &tele_usb_write_buf;
-            tele_usb_writer.print_dbg = &print_dbg;
-            tele_usb_writer.data =
-                NULL;  // asf disk i/o holds state, no handles needed
-            serialize_scene(&tele_usb_writer, &scene, &text);
-
-            file_close();
-            lun_state |= (1 << lun);  // LUN test is done.
-
-            if (filename[3] == '9') {
-                filename[3] = '0';
-                filename[2]++;
+        if (!file_open(FOPEN_MODE_W)) {
+            if (fs_g_status == FS_LUN_WP) {
+                // Test can be done only on no write protected
+                // device
+                continue;
             }
-            else
-                filename[3]++;
+            print_dbg("\r\nfail");
+            continue;
+        }
 
-            print_dbg(".");
+        tt_serializer_t tele_usb_writer;
+        tele_usb_writer.write_char = &tele_usb_putc;
+        tele_usb_writer.write_buffer = &tele_usb_write_buf;
+        tele_usb_writer.print_dbg = &print_dbg;
+        tele_usb_writer.data =
+            NULL;  // asf disk i/o holds state, no handles needed
+        serialize_scene(&tele_usb_writer, &scene, &text);
+
+        file_close();
+
+        if (filename[3] == '9') {
+            filename[3] = '0';
+            filename[2]++;
+        }
+        else
+            filename[3]++;
+
+        print_dbg(".");
+    }
+
+    nav_filelist_reset();
+
+
+    // READ SCENES
+    strcpy(filename, "tt00.txt");
+    print_dbg("\r\nreading scenes...");
+
+    strcpy(text_buffer, "READ");
+    region_fill(&line[3], 0);
+    font_string_region_clip_tab(&line[3], text_buffer, 2, 0, 0xa, 0);
+    region_draw(&line[3]);
+
+    for (int i = 0; i < SCENE_SLOTS; i++) {
+        scene_state_t scene;
+        ss_init(&scene);
+        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
+                                   // buffer is large enough!
+        region_fill(&line[3], 0);
+        font_string_region_clip_tab(&line[3], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[3]);
+        if (nav_filelist_findname(filename, 0)) {
+            print_dbg("\r\nfound: ");
+            print_dbg(filename);
+            if (!file_open(FOPEN_MODE_R))
+                print_dbg("\r\ncan't open");
+            else {
+                tt_deserializer_t tele_usb_reader;
+                tele_usb_reader.read_char = &tele_usb_getc;
+                tele_usb_reader.eof = &tele_usb_eof;
+                tele_usb_reader.print_dbg = &print_dbg;
+                tele_usb_reader.data =
+                    NULL;  // asf disk i/o holds state, no handles needed
+                deserialize_scene(&tele_usb_reader, &scene, &text);
+
+                file_close();
+                flash_write(i, &scene, &text);
+            }
         }
 
         nav_filelist_reset();
 
-
-        // READ SCENES
-        strcpy(filename, "tt00.txt");
-        print_dbg("\r\nreading scenes...");
-
-        strcpy(text_buffer, "READ");
-        region_fill(&line[2], 0);
-        font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[2]);
-
-        for (int i = 0; i < SCENE_SLOTS; i++) {
-            scene_state_t scene;
-            ss_init(&scene);
-            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-            strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                       // buffer is large enough!
-            region_fill(&line[2], 0);
-            font_string_region_clip_tab(&line[2], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[2]);
-            if (nav_filelist_findname(filename, 0)) {
-                print_dbg("\r\nfound: ");
-                print_dbg(filename);
-                if (!file_open(FOPEN_MODE_R))
-                    print_dbg("\r\ncan't open");
-                else {
-                    tt_deserializer_t tele_usb_reader;
-                    tele_usb_reader.read_char = &tele_usb_getc;
-                    tele_usb_reader.eof = &tele_usb_eof;
-                    tele_usb_reader.print_dbg = &print_dbg;
-                    tele_usb_reader.data =
-                        NULL;  // asf disk i/o holds state, no handles needed
-                    deserialize_scene(&tele_usb_reader, &scene, &text);
-
-                    file_close();
-                    flash_write(i, &scene, &text);
-                }
-            }
-
-            nav_filelist_reset();
-
-            if (filename[3] == '9') {
-                filename[3] = '0';
-                filename[2]++;
-            }
-            else
-                filename[3]++;
+        if (filename[3] == '9') {
+            filename[3] = '0';
+            filename[2]++;
         }
+        else
+            filename[3]++;
     }
 
     nav_exit();

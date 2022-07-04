@@ -21,6 +21,9 @@ extern uint8_t preset_select;
 // holds screen data
 extern region line[8];
 
+// timer control for irq support in usb disk mode
+extern bool default_timers_enabled;
+
 // mode handling
 typedef enum {
     M_LIVE,
@@ -30,6 +33,12 @@ typedef enum {
     M_PRESET_R,
     M_HELP
 } tele_mode_t;
+
+// event queue
+void empty_event_handlers(void);
+void assign_main_event_handlers(void);
+void assign_msc_event_handlers(void);
+void check_events(void);
 
 // device config
 typedef struct { uint8_t flip; } device_config_t;

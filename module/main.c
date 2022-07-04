@@ -88,6 +88,7 @@ region line[8] = {
 };
 char copy_buffer[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
 uint8_t copy_buffer_len = 0;
+bool default_timers_enabled = true;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -164,12 +165,6 @@ static void handler_Trigger(int32_t data);
 static void handler_ScreenRefresh(int32_t data);
 static void handler_EventTimer(int32_t data);
 static void handler_AppCustom(int32_t data);
-
-// event queue
-static void empty_event_handlers(void);
-static void assign_main_event_handlers(void);
-static void assign_msc_event_handlers(void);
-static void check_events(void);
 
 // key handling
 static void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
@@ -253,31 +248,55 @@ void cvTimer_callback(void* o) {
 }
 
 void clockTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventTimer, .data = 0 };
     event_post(&e);
 }
 
 void refreshTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventScreenRefresh, .data = 0 };
     event_post(&e);
 }
 
 void keyTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventKeyTimer, .data = 0 };
     event_post(&e);
 }
 
 void adcTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventPollADC, .data = 0 };
     event_post(&e);
 }
 
 void hidTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventHidTimer, .data = 0 };
     event_post(&e);
 }
 
 void metroTimer_callback(void* o) {
+    if (! default_timers_enabled) {
+        return;
+    }
+
     event_t e = {.type = kEventAppCustom, .data = 0 };
     event_post(&e);
 }
@@ -468,25 +487,8 @@ void handler_HidTimer(int32_t data) {
 }
 
 void handler_MscConnect(int32_t data) {
-    // disable event handlers while doing USB write
-    assign_msc_event_handlers();
-
-    // disable timers
-    u8 flags = irqs_pause();
-
-    // clear screen
-    for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
-    }
-
     // do USB
     tele_usb_disk();
-
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    irqs_resume(flags);
 }
 
 void handler_Trigger(int32_t data) {
@@ -697,12 +699,14 @@ static void midi_seq_continue(void) {
 ////////////////////////////////////////////////////////////////////////////////
 // event queue
 
+// defined in globals.h
 void empty_event_handlers() {
     for (size_t i = 0; i < kNumEventTypes; i++) {
         app_event_handlers[i] = &handler_None;
     }
 }
 
+// defined in globals.h
 void assign_main_event_handlers() {
     empty_event_handlers();
 
@@ -731,14 +735,18 @@ void assign_main_event_handlers() {
     app_event_handlers[kEventSerialDisconnect] = &handler_FtdiDisconnect;
 }
 
-static void assign_msc_event_handlers(void) {
+// defined in globals.h
+void assign_msc_event_handlers(void) {
     empty_event_handlers();
 
     // one day this could be used to map the front button and pot to be used as
     // a UI with a memory stick
+
+    app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
 }
 
 // app event loop
+// defined in globals.h
 void check_events(void) {
     event_t e;
     if (event_next(&e)) { (app_event_handlers)[e.type](e.data); }
@@ -1184,6 +1192,7 @@ int main(void) {
     spi_write(DAC_SPI, 0xff);
     spi_unselectChip(DAC_SPI, DAC_SPI_NPCS);
 
+    default_timers_enabled = true;
     timer_add(&clockTimer, RATE_CLOCK, &clockTimer_callback, NULL);
     timer_add(&cvTimer, RATE_CV, &cvTimer_callback, NULL);
     timer_add(&keyTimer, 71, &keyTimer_callback, NULL);
