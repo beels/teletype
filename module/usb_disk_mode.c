@@ -32,6 +32,9 @@ uint16_t tele_usb_getc(void* self_data);
 bool tele_usb_eof(void* self_data);
 void tele_usb_disk_init(void);
 void tele_usb_disk_finish(void);
+void tele_usb_exec(void);
+bool tele_usb_parse_target_filename(char *buffer, uint8_t preset);
+void tele_usb_disk_render_menu_line(int item, int line_no, int marker);
 
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
@@ -51,56 +54,38 @@ bool tele_usb_eof(void* self_data) {
 
 static int front_counter = 0;
 static int key_counter = 0;
-static int action_counter = 0;
 static bool long_press = false;
+static int menu_selection = 3;
+static char filename_buffer[13];
+
+enum { kBlank = 0, kCurrent, kSelected };
 
 void tele_usb_disk_handler_Front(int32_t data) {
-    ++front_counter;
-
-    char text_buffer[40];
-
-    region_fill(&line[2], 0);
-
-    strcpy(text_buffer, "Front: ");
-    font_string_region_clip(&line[2], text_buffer, 2, 0, 0xa, 0);
-
-    u8 pos = font_string_position(text_buffer, strlen(text_buffer));
-    itoa(front_counter, text_buffer, 10);
-    font_string_region_clip(&line[2], text_buffer, pos + 2, 0, 0xa, 0);
-
-    pos += font_string_position(text_buffer, strlen(text_buffer));
-    pos += font_string_position(" ", 1);
-    itoa(data, text_buffer, 10);
-    font_string_region_clip(&line[2], text_buffer, pos + 2, 0, 0xa, 0);
-
-    region_draw(&line[2]);
-
     if (0 == data) {
         // button down; start timer
-        key_counter = 5;
+        key_counter = 7;
     }
     else {
         // button up; cancel timer
         key_counter = 0;
 
         if (long_press) {
-            // tele_usb_disk_write_and_save();
             long_press = false;
 
-            region_fill(&line[3], 0);
-
-            strcpy(text_buffer, "Write/Save");
-            font_string_region_clip(&line[3], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[3]);
-
-            action_counter = 3;
+            tele_usb_exec();
+            tele_usb_disk_finish();
         }
         else {
-            // do nothing
+            // cycle menu selection
+            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+                                           kBlank);
+
+            menu_selection = (menu_selection + 1) % 4;
+
+            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+                                           kCurrent);
         }
     }
-
-    // tele_usb_disk_finish();
 }
 
 void tele_usb_disk_handler_KeyTimer(int32_t data) {
@@ -114,27 +99,99 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 
         long_press = true;
 
-        char text_buffer[40];
+        tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+                                       kSelected);
+    }
+}
 
-        region_fill(&line[3], 0);
+void tele_usb_exec() {
+    switch (menu_selection) {
+        case 0: {
+            // Write to file
+        } break;
+        case 1: {
+            // Read from file
+        } break;
+        case 2: {
+            // Legacy action
 
-        strcpy(text_buffer, "Long press.");
-        font_string_region_clip(&line[3], text_buffer, 2, 0, 0xa, 0);
+            // clear screen
+            for (size_t i = 0; i < 8; i++) {
+                region_fill(&line[i], 0);
+                region_draw(&line[i]);
+            }
 
-        region_draw(&line[3]);
+            // read/write files
+            tele_usb_disk_write_and_save();
+        } break;
+        case 3: {
+            // Exit
+            // do nothing
+        } break;
+        default: {
+            // error
+            print_dbg("\r\ninvalid action");
+        } break;
+    }
+}
+
+bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
+    return false;
+}
+
+void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
+    char text_buffer[40];
+    u8 gutter = font_string_position(">", 1) + 2;
+
+    region_fill(&line[line_no], 0);
+
+    if (kCurrent == marker) {
+        strcpy(text_buffer, ">");
+    }
+    else if (kSelected == marker) {
+        strcpy(text_buffer, "*");
+    }
+    else {
+        strcpy(text_buffer, " ");
+    }
+    font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
+
+    switch (item) {
+        case 0: { // Menu line 1: Write to file 'abcd.123'
+            strcpy(text_buffer, "Write to file '");
+            strcat(text_buffer, filename_buffer);
+            strcat(text_buffer, "'");
+
+            font_string_region_clip(&line[line_no], text_buffer,
+                                    gutter + 2, 0, 0xa, 0);
+        } break;
+
+        case 1: { // Menu line 2: Read from file 'abcd.123'
+            strcpy(text_buffer, "Read from file '");
+            strcat(text_buffer, filename_buffer);
+            strcat(text_buffer, "'");
+
+            font_string_region_clip(&line[line_no], text_buffer,
+                                    gutter + 2, 0, 0xa, 0);
+        } break;
+
+        case 2: { // Menu line 3: Legacy WRITE/READ operation
+            strcpy(text_buffer, "Legacy WRITE/READ operation");
+
+            font_string_region_clip(&line[line_no], text_buffer,
+                                    gutter + 2, 0, 0xa, 0);
+        } break;
+
+        case 3: { // Menu line 4: Exit USB disk mode
+            strcpy(text_buffer, "Exit USB disk mode");
+            font_string_region_clip(&line[line_no], text_buffer,
+                                    gutter + 2, 0, 0xa, 0);
+        } break;
+
+        default: {} break;
     }
 
-    if (0 < action_counter) {
-        action_counter--;
-    }
-
-    if (1 == action_counter) {
-        // long press action completion
-        action_counter = 0;
-
-        tele_usb_disk_finish();
-    }
-
+    region_draw(&line[line_no]);
 }
 
 void tele_usb_disk_init() {
@@ -163,14 +220,13 @@ void tele_usb_disk_finish() {
 
 // usb disk mode entry point
 void tele_usb_disk() {
-    char text_buffer[40];
     print_dbg("\r\nusb");
 
     tele_usb_disk_init();
 
     // We assume that there is one and only one available LUN, otherwise it is
     // not safe to iterate through all possible LUN even after we finish
-    // writing saving and loading scenes.
+    // writing and reading scenes.
 
     for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
         // print_dbg("\r\nlun: ");
@@ -186,33 +242,45 @@ void tele_usb_disk() {
             continue;
         }
 
-        // Print current scene number and name
-        //
-        // Bug: it seems that the scene number is not recorded anywhere.  We
-        // have only the current preset (`preset_select`), which can be chenged
-        // in the preset read screen without actually changing the current
-        // scene.
+        // Parse selected preset number
+        char preset_buffer[3];
+        itoa(preset_select, preset_buffer, 10);
 
+        // Parse selected preset title
+        char preset_title[40];
+        strcpy(preset_title, flash_scene_text(preset_select, 0));
+
+        // Parse or generate target filename for selected preset
+        if (!tele_usb_parse_target_filename(filename_buffer, preset_select)) {
+            strcpy(filename_buffer, "tt00");
+            if (10 <= preset_select) {
+                strcpy(filename_buffer + 2, preset_buffer);
+            }
+            else if (0 < preset_select) {
+                strcpy(filename_buffer + 3, preset_buffer);
+            }
+            strcpy(filename_buffer + 4, ".txt");
+        }
+
+        // Print selected preset number and title
         {
-            itoa(preset_select, text_buffer, 10);
-
             region_fill(&line[0], 0);
-            font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-            u8 pos = font_string_position(text_buffer, strlen(text_buffer));
+            font_string_region_clip(&line[0], preset_buffer, 2, 0, 0xa, 0);
+            u8 pos = font_string_position(preset_buffer,
+                                          strlen(preset_buffer));
             pos += font_string_position(" ", 1);
             font_string_region_clip(&line[0],
-                                    flash_scene_text(preset_select, 0),
+                                    preset_title,
                                     pos + 2, 0, 0xa, 0);
             region_draw(&line[0]);
         }
 
-        {
-            strcpy(text_buffer, "PRESS TO CONFIRM");
-
-            region_fill(&line[1], 0);
-            font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[1]);
-        }
+        // Menu items
+        tele_usb_disk_render_menu_line(0, 2, kBlank);
+        tele_usb_disk_render_menu_line(1, 3, kBlank);
+        tele_usb_disk_render_menu_line(2, 4, kBlank);
+        tele_usb_disk_render_menu_line(3, 5, kCurrent);
+        menu_selection = 3;
 
         break;
     }
