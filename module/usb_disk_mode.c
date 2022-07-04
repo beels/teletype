@@ -108,9 +108,76 @@ void tele_usb_exec() {
     switch (menu_selection) {
         case 0: {
             // Write to file
+            scene_state_t scene;
+            ss_init(&scene);
+
+            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+            flash_read(preset_select, &scene, &text, 1, 1, 1);
+
+            if (!nav_file_create((FS_STRING)filename_buffer)) {
+                if (fs_g_status != FS_ERR_FILE_EXIST) {
+                    if (fs_g_status == FS_LUN_WP) {
+                        // Test can be done only on no write protected
+                        // device
+                        break;
+                    }
+                    print_dbg("\r\nfail");
+                    break;
+                }
+            }
+
+            if (!file_open(FOPEN_MODE_W)) {
+                if (fs_g_status == FS_LUN_WP) {
+                    // Test can be done only on no write protected
+                    // device
+                    break;
+                }
+                print_dbg("\r\nfail");
+                break;
+            }
+
+            tt_serializer_t tele_usb_writer;
+            tele_usb_writer.write_char = &tele_usb_putc;
+            tele_usb_writer.write_buffer = &tele_usb_write_buf;
+            tele_usb_writer.print_dbg = &print_dbg;
+            tele_usb_writer.data =
+                NULL;  // asf disk i/o holds state, no handles needed
+            serialize_scene(&tele_usb_writer, &scene, &text);
+
+            file_close();
+            nav_filelist_reset();
+            nav_exit();
         } break;
         case 1: {
             // Read from file
+            scene_state_t scene;
+            ss_init(&scene);
+            char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+            memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+            if (nav_filelist_findname(filename_buffer, 0)) {
+                print_dbg("\r\nfound: ");
+                print_dbg(filename_buffer);
+                if (!file_open(FOPEN_MODE_R))
+                    print_dbg("\r\ncan't open");
+                else {
+                    tt_deserializer_t tele_usb_reader;
+                    tele_usb_reader.read_char = &tele_usb_getc;
+                    tele_usb_reader.eof = &tele_usb_eof;
+                    tele_usb_reader.print_dbg = &print_dbg;
+                    tele_usb_reader.data =
+                        NULL;  // asf disk i/o holds state, no handles needed
+                    deserialize_scene(&tele_usb_reader, &scene, &text);
+
+                    file_close();
+                    flash_write(preset_select, &scene, &text);
+                }
+            }
+
+            nav_filelist_reset();
+            nav_exit();
         } break;
         case 2: {
             // Legacy action
@@ -136,6 +203,22 @@ void tele_usb_exec() {
 }
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
+    for (int i = 0; i < 36; ++i) {
+        const char *text = flash_scene_text(preset, i);
+
+        if ('#' == text[0] && '1' <= text[1] && text[1] <= '8') {
+            // Start of script, no more description text available.
+            return false;
+        }
+
+        if (0 == strncmp(text, ":FNAME:", 7)) {
+            strncpy(buffer, text + 7, 13);
+            for (int j = 0; j < strlen(buffer); ++j) {
+                buffer[j] = tolower((int) buffer[j]);
+            }
+            return true;
+        }
+    }
     return false;
 }
 
