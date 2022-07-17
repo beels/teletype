@@ -37,10 +37,21 @@ static void tele_usb_disk_init(void);
 static void tele_usb_disk_finish(void);
 static void tele_usb_exec(void);
 static bool tele_usb_parse_target_filename(char *buffer, uint8_t preset);
+static bool tele_usb_disk_iterate_filename(char *output, char *pattern);
+static bool tele_usb_find_wildcard_range(int *wildcard_start,
+                                         int *wildcard_len,
+                                         int *wildcard_tail,
+                                         char *filename);
+static void tele_usb_disk_increment_filename(char *filename,
+                                             int wildcard_start,
+                                             int wildcard_len,
+                                             int wildcard_tail);
 static void tele_usb_disk_render_menu_line(int item, int line_no, int marker);
 static void tele_usb_disk_write_file(char *filename, int preset);
 static void tele_usb_disk_read_file(char *filename, int preset);
 static void tele_usb_disk_write_and_read(void);
+
+#define FNAME_BUFFER_LEN 13
 
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
@@ -62,7 +73,8 @@ static int front_counter = 0;
 static int key_counter = 0;
 static bool long_press = false;
 static int menu_selection = 3;
-static char filename_buffer[13];
+static char filename_buffer[FNAME_BUFFER_LEN];
+static char nextname_buffer[FNAME_BUFFER_LEN];
 
 enum { kBlank = 0, kCurrent, kSelected };
 
@@ -148,22 +160,89 @@ void tele_usb_exec() {
 }
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
-    for (int i = 0; i < 36; ++i) {
+    for (int i = 0; i < SCENE_TEXT_LINES; ++i) {
         const char *text = flash_scene_text(preset, i);
 
-        if ('#' == text[0] && '1' <= text[1] && text[1] <= '8') {
-            // Start of script, no more description text available.
-            return false;
-        }
-
         if (0 == strncmp(text, ":FNAME:", 7)) {
-            strncpy(buffer, text + 7, 13);
+            strncpy(buffer, text + 7, FNAME_BUFFER_LEN);
             for (int j = 0; j < strlen(buffer); ++j) {
                 buffer[j] = tolower((int) buffer[j]);
             }
             return true;
         }
     }
+    return false;
+}
+
+bool tele_usb_disk_iterate_filename(char *output, char *pattern) {
+    return nav_filelist_findname(pattern, false)
+        && nav_filelist_validpos()
+        && nav_file_getname(output, FNAME_BUFFER_LEN);
+}
+
+void tele_usb_disk_increment_filename(char *filename,
+                                      int wildcard_start,
+                                      int wildcard_len,
+                                      int wildcard_tail)
+{
+    int n = atoi(filename + wildcard_start) + 1;
+
+    // Copy the trailing text to the end of the filename buffer.
+
+    strncpy(filename + wildcard_start + wildcard_len,
+            filename + wildcard_start + 1,
+            FNAME_BUFFER_LEN - 1 - wildcard_start - wildcard_len);
+
+    // Write the increment number.
+
+    int i = wildcard_start + wildcard_len - 1;
+    while (wildcard_start <= i) {
+        filename[i] = '0' + (n % 10);
+        n /= 10;
+        --i;
+    }
+}
+
+// ARB:
+// It looks like wildcard_tail can be eliminated as an output parameter.
+
+bool tele_usb_find_wildcard_range(int *wildcard_start,
+                                  int *wildcard_len,
+                                  int *wildcard_tail,
+                                  char *filename)
+{
+    int separator = FNAME_BUFFER_LEN;
+    for (int i = 0; i < FNAME_BUFFER_LEN - 1; ++i) {
+        if ('*' == filename[i]) {
+            *wildcard_start = i;
+            *wildcard_tail = strlen(filename + i) - 1;
+            if (separator < i) {
+                // We are in the extension.
+                // Constraint:
+                // i - (separator + 1) + wildcard_len + wildcard_tail <= 3
+
+                *wildcard_len = 3 - (i - (separator + 1)) - *wildcard_tail;
+            }
+            else {
+                // We are in the main filename.
+                // Constraint:
+                // i + wildcard_len + (separator - i - 1) <= 8
+
+                separator = i;
+                while(separator < 8 && '.' != filename[separator])
+                {
+                     ++separator;
+                }
+
+                *wildcard_len = 9 - separator;
+            }
+            return true;
+        }
+        else if ('.' == filename[i]) {
+            separator = i;
+        }
+    }
+
     return false;
 }
 
@@ -214,6 +293,18 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
             strcpy(text_buffer, "Exit USB disk mode");
             font_string_region_clip(&line[line_no], text_buffer,
                                     gutter + 2, 0, 0xa, 0);
+        } break;
+
+        case 4: { // Menu line 0: filename iterator
+            if (nextname_buffer[0]) {
+                font_string_region_clip(&line[line_no], nextname_buffer,
+                                        gutter + 2, 0, 0xa, 0);
+            }
+            else {
+                strcpy(text_buffer, "(");
+                strcat(text_buffer, filename_buffer);
+                strcat(text_buffer, ")");
+            }
         } break;
 
         default: {} break;
@@ -281,6 +372,8 @@ void tele_usb_disk() {
         strcpy(preset_title, flash_scene_text(preset_select, 0));
 
         // Parse or generate target filename for selected preset
+        nextname_buffer[0] = '\0';
+        int wc_start, wc_len, wc_tail;
         if (!tele_usb_parse_target_filename(filename_buffer, preset_select)) {
             strcpy(filename_buffer, "tt00");
             if (10 <= preset_select) {
@@ -290,6 +383,22 @@ void tele_usb_disk() {
                 strcpy(filename_buffer + 3, preset_buffer);
             }
             strcpy(filename_buffer + 4, ".txt");
+        }
+        else if (tele_usb_find_wildcard_range(&wc_start, &wc_len, &wc_tail,
+                                              filename_buffer))
+        {
+            while(tele_usb_disk_iterate_filename(nextname_buffer,
+                                                 filename_buffer))
+            {
+                ; // Do nothing
+            }
+
+            strncpy(filename_buffer, nextname_buffer, sizeof(filename_buffer));
+
+            tele_usb_disk_increment_filename(nextname_buffer,
+                                             wc_start,
+                                             wc_len,
+                                             wc_tail);
         }
 
         // Print selected preset number and title
@@ -306,6 +415,7 @@ void tele_usb_disk() {
         }
 
         // Menu items
+        tele_usb_disk_render_menu_line(4, 1, kBlank);
         tele_usb_disk_render_menu_line(0, 2, kBlank);
         tele_usb_disk_render_menu_line(1, 3, kBlank);
         tele_usb_disk_render_menu_line(2, 4, kBlank);
@@ -391,7 +501,7 @@ void tele_usb_disk_read_file(char *filename, int preset) {
 void tele_usb_disk_write_and_read() {
     // WRITE SCENES
     char text_buffer[40];
-    char filename[13];
+    char filename[FNAME_BUFFER_LEN];
     strcpy(filename, "tt00s.txt");
 
     print_dbg("\r\nwriting scenes");
