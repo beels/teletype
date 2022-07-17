@@ -7,6 +7,7 @@ tests: main.o \
 	parser_tests.o process_tests.o \
 	turtle_tests.o \
 	serialize_scene_tests.o \
+	filename_tests.o \
 	../src/teletype.o ../src/command.o ../src/helpers.o \
 	../src/every.o ../src/match_token.o ../src/scanner.o \
 	../src/state.o ../src/table.o ../src/turtle.o ../src/chaos.o \
@@ -50,3 +51,4 @@ clean:
 	rm -f ../libavr32/src/*.o
 	rm -f ../src/match_token.c
 	rm -f ../src/scanner.c
+	rm -f ../module/*.o

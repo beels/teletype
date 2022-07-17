@@ -9,6 +9,7 @@
 #include "teletype.h"
 #include "teletype_io.h"
 #include "turtle_tests.h"
+#include "filename_tests.h"
 
 uint32_t tele_get_ticks() {
     return 0;
@@ -56,6 +57,7 @@ int main(int argc, char **argv) {
     RUN_SUITE(process_suite);
     RUN_SUITE(turtle_suite);
     RUN_SUITE(serialize_scene_suite);
+    RUN_SUITE(filename_suite);
 
     GREATEST_MAIN_END();
 }
