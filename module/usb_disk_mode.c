@@ -65,11 +65,18 @@ bool tele_usb_eof(void* self_data) {
 static int front_counter = 0;
 static int key_counter = 0;
 static bool long_press = false;
-static int menu_selection = 3;
+static int menu_selection = 4;
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
 enum { kBlank = 0, kCurrent, kSelected };
+enum {
+    kReadFile = 0,
+    kWriteFile,
+    kWriteNextInSeries,
+    kLegacyWriteRead,
+    kExit
+};
 
 void tele_usb_disk_handler_Front(int32_t data) {
     if (0 == data) {
@@ -88,12 +95,16 @@ void tele_usb_disk_handler_Front(int32_t data) {
         }
         else {
             // cycle menu selection
-            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
                                            kBlank);
 
-            menu_selection = (menu_selection + 1) % 4;
+            menu_selection = (menu_selection + 1) % 5;
 
-            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+            if (menu_selection == kWriteNextInSeries && !nextname_buffer[0]) {
+                menu_selection = (menu_selection + 1) % 5;
+            }
+
+            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
                                            kCurrent);
         }
     }
@@ -110,26 +121,32 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 
         long_press = true;
 
-        tele_usb_disk_render_menu_line(menu_selection, menu_selection + 2,
+        tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
                                        kSelected);
     }
 }
 
 void tele_usb_exec() {
     switch (menu_selection) {
-        case 0: {
-            // Write to file
-            tele_usb_disk_write_file(filename_buffer, preset_select);
-            nav_filelist_reset();
-            nav_exit();
-        } break;
-        case 1: {
+        case kReadFile: {
             // Read from file
             tele_usb_disk_read_file(filename_buffer, preset_select);
             nav_filelist_reset();
             nav_exit();
         } break;
-        case 2: {
+        case kWriteFile: {
+            // Write to file
+            tele_usb_disk_write_file(filename_buffer, preset_select);
+            nav_filelist_reset();
+            nav_exit();
+        } break;
+        case kWriteNextInSeries: {
+            // Write to next file in series
+            tele_usb_disk_write_file(nextname_buffer, preset_select);
+            nav_filelist_reset();
+            nav_exit();
+        } break;
+        case kLegacyWriteRead: {
             // Legacy action
 
             // clear screen
@@ -141,7 +158,7 @@ void tele_usb_exec() {
             // read/write files
             tele_usb_disk_write_and_read();
         } break;
-        case 3: {
+        case kExit: {
             // Exit
             // do nothing
         } break;
@@ -191,16 +208,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
     font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
 
     switch (item) {
-        case 0: { // Menu line 1: Write to file 'abcd.123'
-            strcpy(text_buffer, "Write to file '");
-            strcat(text_buffer, filename_buffer);
-            strcat(text_buffer, "'");
-
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-
-        case 1: { // Menu line 2: Read from file 'abcd.123'
+        case kReadFile: { // Menu line 2: Read from file 'abcd.123'
             strcpy(text_buffer, "Read from file '");
             strcat(text_buffer, filename_buffer);
             strcat(text_buffer, "'");
@@ -209,29 +217,37 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
                                     gutter + 2, 0, 0xa, 0);
         } break;
 
-        case 2: { // Menu line 3: Legacy WRITE/READ operation
+        case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
+            strcpy(text_buffer, "Write to file '");
+            strcat(text_buffer, filename_buffer);
+            strcat(text_buffer, "'");
+
+            font_string_region_clip(&line[line_no], text_buffer,
+                                    gutter + 2, 0, 0xa, 0);
+        } break;
+
+        case kWriteNextInSeries: { // Menu line 0: filename iterator
+            if (nextname_buffer[0]) {
+                strcpy(text_buffer, "Write to file '");
+                strcat(text_buffer, nextname_buffer);
+                strcat(text_buffer, "'");
+
+                font_string_region_clip(&line[line_no], text_buffer,
+                                        gutter + 2, 0, 0xa, 0);
+            }
+        } break;
+
+        case kLegacyWriteRead: { // Menu line 3: Legacy WRITE/READ operation
             strcpy(text_buffer, "Legacy WRITE/READ operation");
 
             font_string_region_clip(&line[line_no], text_buffer,
                                     gutter + 2, 0, 0xa, 0);
         } break;
 
-        case 3: { // Menu line 4: Exit USB disk mode
+        case kExit: { // Menu line 4: Exit USB disk mode
             strcpy(text_buffer, "Exit USB disk mode");
             font_string_region_clip(&line[line_no], text_buffer,
                                     gutter + 2, 0, 0xa, 0);
-        } break;
-
-        case 4: { // Menu line 0: filename iterator
-            if (nextname_buffer[0]) {
-                font_string_region_clip(&line[line_no], nextname_buffer,
-                                        gutter + 2, 0, 0xa, 0);
-            }
-            else {
-                strcpy(text_buffer, "(");
-                strcat(text_buffer, filename_buffer);
-                strcat(text_buffer, ")");
-            }
         } break;
 
         default: {} break;
@@ -338,12 +354,12 @@ void tele_usb_disk() {
         }
 
         // Menu items
-        tele_usb_disk_render_menu_line(4, 1, kBlank);
-        tele_usb_disk_render_menu_line(0, 2, kBlank);
-        tele_usb_disk_render_menu_line(1, 3, kBlank);
-        tele_usb_disk_render_menu_line(2, 4, kBlank);
-        tele_usb_disk_render_menu_line(3, 5, kCurrent);
-        menu_selection = 3;
+        tele_usb_disk_render_menu_line(kReadFile,          1, kBlank);
+        tele_usb_disk_render_menu_line(kWriteFile,         2, kBlank);
+        tele_usb_disk_render_menu_line(kWriteNextInSeries, 3, kBlank);
+        tele_usb_disk_render_menu_line(kLegacyWriteRead,   4, kBlank);
+        tele_usb_disk_render_menu_line(kExit,              5, kCurrent);
+        menu_selection = 4;
 
         break;
     }
