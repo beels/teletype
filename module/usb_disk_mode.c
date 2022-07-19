@@ -208,7 +208,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
     font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
 
     switch (item) {
-        case kReadFile: { // Menu line 2: Read from file 'abcd.123'
+        case kReadFile: { // Menu line 0: Read from file 'abcd.123'
             strcpy(text_buffer, "Read from file '");
             strcat(text_buffer, filename_buffer);
             strcat(text_buffer, "'");
@@ -226,7 +226,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
                                     gutter + 2, 0, 0xa, 0);
         } break;
 
-        case kWriteNextInSeries: { // Menu line 0: filename iterator
+        case kWriteNextInSeries: { // Menu line 2: filename iterator
             if (nextname_buffer[0]) {
                 strcpy(text_buffer, "Write to file '");
                 strcat(text_buffer, nextname_buffer);
