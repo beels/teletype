@@ -129,23 +129,18 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 
 void tele_usb_exec() {
     switch (menu_selection) {
+        uint8_t preset = flash_last_saved_scene();
         case kReadFile: {
             // Read from file
-            tele_usb_disk_read_file(filename_buffer, preset_select);
-            nav_filelist_reset();
-            nav_exit();
+            tele_usb_disk_read_file(filename_buffer, preset);
         } break;
         case kWriteFile: {
             // Write to file
-            tele_usb_disk_write_file(filename_buffer, preset_select);
-            nav_filelist_reset();
-            nav_exit();
+            tele_usb_disk_write_file(filename_buffer, preset);
         } break;
         case kWriteNextInSeries: {
             // Write to next file in series
-            tele_usb_disk_write_file(nextname_buffer, preset_select);
-            nav_filelist_reset();
-            nav_exit();
+            tele_usb_disk_write_file(nextname_buffer, preset);
         } break;
         case kLegacyWriteRead: {
             // Legacy action
@@ -162,12 +157,17 @@ void tele_usb_exec() {
         case kExit: {
             // Exit
             // do nothing
+            return;
         } break;
         default: {
             // error
             print_dbg("\r\ninvalid action");
+            return;
         } break;
     }
+
+    nav_filelist_reset();
+    nav_exit();
 }
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
@@ -313,23 +313,32 @@ void tele_usb_disk() {
             continue;
         }
 
+
+            // ARB:
+            // We should take the title of the current scene here, not the
+            // title of the preset scene.  That is probably just a matter of
+            // looking at `scene_text[0]`.  However we may not have access to
+            // the current scene number at all.  In that case, how about just
+            // not using the scene number?
+
         // Parse selected preset number
+        uint8_t preset = flash_last_saved_scene();
         char preset_buffer[3];
-        itoa(preset_select, preset_buffer, 10);
+        itoa(preset, preset_buffer, 10);
 
         // Parse selected preset title
         char preset_title[40];
-        strcpy(preset_title, flash_scene_text(preset_select, 0));
+        strcpy(preset_title, flash_scene_text(preset, 0));
 
         // Parse or generate target filename for selected preset
         nextname_buffer[0] = '\0';
         int wc_start;
-        if (!tele_usb_parse_target_filename(filename_buffer, preset_select)) {
+        if (!tele_usb_parse_target_filename(filename_buffer, preset)) {
             strcpy(filename_buffer, "tt00");
-            if (10 <= preset_select) {
+            if (10 <= preset) {
                 strcpy(filename_buffer + 2, preset_buffer);
             }
-            else if (0 < preset_select) {
+            else if (0 < preset) {
                 strcpy(filename_buffer + 3, preset_buffer);
             }
             strcpy(filename_buffer + 4, ".txt");
@@ -432,8 +441,16 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     if (nav_filelist_findname((FS_STRING)filename, 0)) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
-        if (!file_open(FOPEN_MODE_R))
-            print_dbg("\r\ncan't open");
+        if (!file_open(FOPEN_MODE_R)) {
+            char text_buffer[40];
+            strcpy(text_buffer, "fail: ");
+            strcat(text_buffer, filename);
+
+            region_fill(&line[0], 0);
+            font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+            region_draw(&line[0]);
+            // print_dbg("\r\ncan't open");
+        }
         else {
             tt_deserializer_t tele_usb_reader;
             tele_usb_reader.read_char = &tele_usb_getc;
@@ -446,6 +463,15 @@ void tele_usb_disk_read_file(char *filename, int preset) {
             file_close();
             flash_write(preset, &scene, &text);
         }
+    }
+    else {
+        char text_buffer[40];
+        strcpy(text_buffer, "no file: ");
+        strcat(text_buffer, filename);
+
+        region_fill(&line[0], 0);
+        font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+        region_draw(&line[0]);
     }
 }
 
