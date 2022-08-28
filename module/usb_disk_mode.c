@@ -46,6 +46,14 @@ static void tele_usb_disk_write_file(char *filename, int preset);
 static void tele_usb_disk_read_file(char *filename, int preset);
 static void tele_usb_disk_write_and_read(void);
 
+static void main_menu_short_press();
+static void main_menu_button_timeout();
+static void main_menu_long_press();
+
+static void (*short_press_action)();
+static void (*button_timeout_action)();
+static void (*long_press_action)();
+
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
 }
@@ -63,9 +71,13 @@ bool tele_usb_eof(void* self_data) {
 }
 
 static int front_counter = 0;
-static int key_counter = 0;
+static int button_counter = 0;
 static bool long_press = false;
 static int menu_selection = 4;
+
+            // ARB:
+            // These buffers can be offsets into `copy_buffer`.
+
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
@@ -79,51 +91,65 @@ enum {
     kExit
 };
 
+static
+void main_menu_short_press() {
+    // cycle menu selection
+    tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
+                                   kBlank);
+
+    menu_selection = (menu_selection + 1) % 5;
+
+    if (menu_selection == kWriteNextInSeries && !nextname_buffer[0]) {
+        menu_selection = (menu_selection + 1) % 5;
+    }
+
+    tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
+                                   kCurrent);
+}
+
+static
+void main_menu_button_timeout() {
+    tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
+                                   kSelected);
+}
+
+static
+void main_menu_long_press() {
+    tele_usb_exec();
+    tele_usb_disk_finish();
+}
+
 void tele_usb_disk_handler_Front(int32_t data) {
     if (0 == data) {
         // button down; start timer
-        key_counter = 7;
+        button_counter = 7;
     }
     else {
         // button up; cancel timer
-        key_counter = 0;
+        button_counter = 0;
 
         if (long_press) {
             long_press = false;
-
-            tele_usb_exec();
-            tele_usb_disk_finish();
+            (*long_press_action)();
         }
         else {
-            // cycle menu selection
-            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
-                                           kBlank);
-
-            menu_selection = (menu_selection + 1) % 5;
-
-            if (menu_selection == kWriteNextInSeries && !nextname_buffer[0]) {
-                menu_selection = (menu_selection + 1) % 5;
-            }
-
-            tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
-                                           kCurrent);
+            (*short_press_action)();
         }
     }
 }
 
 void tele_usb_disk_handler_KeyTimer(int32_t data) {
-    if (0 < key_counter) {
-        key_counter--;
+    if (0 < button_counter) {
+        button_counter--;
     }
 
-    if (1 == key_counter) {
+    if (1 == button_counter) {
         // long press action
-        key_counter = 0;
+        button_counter = 0;
 
         long_press = true;
 
-        tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
-                                       kSelected);
+        (*button_timeout_action)();
     }
 }
 
@@ -267,6 +293,11 @@ void tele_usb_disk_init() {
     // disable event handlers while doing USB write
     assign_msc_event_handlers();
 
+    // initial button handlers (main menu)
+    short_press_action = main_menu_short_press;
+    button_timeout_action = main_menu_button_timeout;
+    long_press_action = main_menu_long_press;
+
     // disable timers
     default_timers_enabled = false;
 
@@ -277,7 +308,7 @@ void tele_usb_disk_init() {
     }
 
     front_counter = 0;
-    key_counter = 0;
+    button_counter = 0;
 }
 
 void tele_usb_disk_finish() {
