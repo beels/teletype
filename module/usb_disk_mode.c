@@ -502,15 +502,12 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     }
 }
 
-static void disk_browse_short_press(void) {
-    static int state = 0;
+#define DISK_BROWSE_PAGE_SIZE 7
 
-    if (++state % 2) {
-        tele_usb_disk_render_line("==============", 0, kCurrent);
-    }
-    else {
-        tele_usb_disk_render_line("<exit_browser>", 0, kCurrent);
-    }
+static int disk_browse_num_files;
+// static int disk_browse_num_pages;
+
+static void disk_browse_short_press(void) {
 }
 
 static void disk_browse_button_timeout(void) {
@@ -525,6 +522,9 @@ static void disk_browse_button_timeout(void) {
 static void handler_None(int32_t data) {}
 
 static void disk_browse_finish(void) {
+    nav_filelist_reset();
+    nav_exit();
+
     app_event_handlers[kEventPollADC] = &handler_None;
     tele_usb_disk_init();
 }
@@ -533,29 +533,6 @@ static void disk_browse_long_press(void) {
     disk_browse_finish();
 }
 static uint8_t read_scaled_param(uint8_t last_value, uint8_t scale) {
-    uint16_t adc[4];
-
-    adc_convert(&adc);
-
-    uint8_t value = adc[1] / (2048 / scale);
-
-    uint8_t deadzone = value & 1;
-    value >>= 1;
-    if (!deadzone || 1 < abs(value - last_value)) {
-        last_value = value;
-    }
-
-    return value;
-}
-
-static void disk_browse_PollADC(int32_t data) {
-    static int16_t last_knob = 0;
-    uint16_t adc[4];
-
-    adc_convert(&adc);
-
-    last_knob = adc[1];
-
     // The knob seems to have a 12 bit range.  Division into more than 64 zones
     // is probably impractical.
     //
@@ -577,13 +554,19 @@ static void disk_browse_PollADC(int32_t data) {
     // // now do stuff
     // ```
 
-    char text_buffer[40];
+    uint16_t adc[4];
 
-    static uint8_t val128 = 0;
-    strcpy(text_buffer, "128: ");
-    val128 = read_scaled_param(val128, 128);
-    itoa(val128, text_buffer + 5, 10);
-    tele_usb_disk_render_line(text_buffer, 7, kBlank);
+    adc_convert(&adc);
+
+    uint8_t value = adc[1] / (2048 / scale);
+
+    uint8_t deadzone = value & 1;
+    value >>= 1;
+    if (!deadzone || 1 < abs(value - last_value)) {
+        last_value = value;
+    }
+
+    return value;
 }
 
 static void disk_browse_read_filename(char *filename, int index) {
@@ -600,11 +583,51 @@ static void disk_browse_read_filename(char *filename, int index) {
     }
 }
 
-#define DISK_BROWSE_PAGE_SIZE 6
+static void disk_browse_PollADC(int32_t data) {
+    static int16_t last_knob = 0;
+    uint16_t adc[4];
 
-static int disk_browse_num_files;
-static int disk_browse_num_pages;
-static int disk_browse_first_entry;
+    adc_convert(&adc);
+
+    last_knob = adc[1];
+
+    static uint8_t last_index = 0;
+    uint8_t        index = read_scaled_param(last_index,
+                                             disk_browse_num_files);
+
+    if (index != last_index) {
+        int page = index / DISK_BROWSE_PAGE_SIZE;
+        bool update_page = (page != last_index / DISK_BROWSE_PAGE_SIZE);
+
+        // Render current page
+
+        int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+        int current_entry = index - first_entry;
+        int last_entry = last_index - first_entry;
+
+        for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
+            if (first_entry + i < disk_browse_num_files
+                && (update_page || i == current_entry || i == last_entry))
+            {
+                char filename[40];
+                itoa(first_entry + i, filename, 10);
+                strcat(filename, " ");
+
+                disk_browse_read_filename(filename + strlen(filename), first_entry + i);
+                tele_usb_disk_render_line(filename,
+                                          i + 1,
+                                          i == current_entry ? kCurrent
+                                                             : kBlank);
+            }
+            else {
+                region_fill(&line[i + 1], 0);
+                region_draw(&line[i + 1]);
+            }
+        }
+    }
+
+    last_index = index;
+}
 
 static void tele_usb_disk_browse_init(char *filename,
                                       char *nextname,
@@ -627,17 +650,13 @@ static void tele_usb_disk_browse_init(char *filename,
 
     nav_filelist_single_enable(FS_FILE);
     disk_browse_num_files = nav_filelist_nb(FS_FILE);
-    disk_browse_num_pages =
-        disk_browse_num_files / DISK_BROWSE_PAGE_SIZE
-        + (0 < disk_browse_num_files % DISK_BROWSE_PAGE_SIZE);
-    disk_browse_first_entry = 0;
+    // disk_browse_num_pages =
+    //     disk_browse_num_files / DISK_BROWSE_PAGE_SIZE
+    //     + (0 < disk_browse_num_files % DISK_BROWSE_PAGE_SIZE);
 
     // render browser
-    tele_usb_disk_render_line("<exit_browser>", 0, kCurrent);
-
-    for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
-        char filename[FNAME_BUFFER_LEN];
-        disk_browse_read_filename(filename, disk_browse_first_entry + i);
-        tele_usb_disk_render_line(filename, i + 1, i ? kBlank : kCurrent);
-    }
+    char text_buffer[40];
+    itoa(disk_browse_num_files, text_buffer, 10);
+    strcat(text_buffer, " files total");
+    tele_usb_disk_render_line(text_buffer, 0, kBlank);
 }
