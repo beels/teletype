@@ -293,21 +293,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
     }
 }
 
-void tele_usb_disk_init() {
-    // initial button handlers (main menu)
-    short_press_action = &main_menu_short_press;
-    button_timeout_action = &main_menu_button_timeout;
-    long_press_action = &main_menu_long_press;
-
-    button_counter = 0;
-    long_press = false;
-
-    // clear screen
-    for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
-    }
-
+static void tele_usb_discover_filenames(void) {
     // We assume that there is one and only one available LUN, otherwise it is
     // not safe to iterate through all possible LUN even after we finish
     // writing and reading scenes.
@@ -328,19 +314,13 @@ void tele_usb_disk_init() {
             continue;
         }
 
-        // Parse selected preset number
-        uint8_t preset = flash_last_saved_scene();
-        char preset_buffer[3];
-        itoa(preset, preset_buffer, 10);
-
-        // Parse selected preset title
-        char preset_title[40];
-        strcpy(preset_title, flash_scene_text(preset, 0));
-
         // Parse or generate target filename for selected preset
         nextname_buffer[0] = '\0';
         int wc_start;
+        uint8_t preset = flash_last_saved_scene();
         if (!tele_usb_parse_target_filename(filename_buffer, preset)) {
+            char preset_buffer[3];
+            itoa(preset, preset_buffer, 10);
             strcpy(filename_buffer, "tt00");
             if (10 <= preset) {
                 strcpy(filename_buffer + 2, preset_buffer);
@@ -365,32 +345,57 @@ void tele_usb_disk_init() {
             nav_filelist_reset();
         }
 
-        // Print selected preset number and title
-        {
-            region_fill(&line[0], 0);
-            font_string_region_clip(&line[0], preset_buffer, 2, 0, 0xa, 0);
-            u8 pos = font_string_position(preset_buffer,
-                                          strlen(preset_buffer));
-            pos += font_string_position(" ", 1);
-            font_string_region_clip(&line[0],
-                                    preset_title,
-                                    pos + 2, 0, 0xa, 0);
-            region_draw(&line[0]);
-        }
-
-        // Menu items
-        tele_usb_disk_render_menu_line(kReadFile,          1, kBlank);
-        tele_usb_disk_render_menu_line(kWriteFile,         2, kBlank);
-        tele_usb_disk_render_menu_line(kWriteNextInSeries, 3, kBlank);
-        tele_usb_disk_render_menu_line(kBrowse,            4, kBlank);
-        tele_usb_disk_render_menu_line(kExit,              5, kCurrent);
-        menu_selection = 4;
-
-        // Help text
-        tele_usb_disk_render_menu_line(kHelpText,          7, kBlank);
-
         break;
     }
+}
+
+void tele_usb_disk_init() {
+    // initial button handlers (main menu)
+    short_press_action = &main_menu_short_press;
+    button_timeout_action = &main_menu_button_timeout;
+    long_press_action = &main_menu_long_press;
+
+    button_counter = 0;
+    long_press = false;
+
+    // clear screen
+    for (size_t i = 0; i < 8; i++) {
+        region_fill(&line[i], 0);
+        region_draw(&line[i]);
+    }
+
+    // Parse selected preset number
+    uint8_t preset = flash_last_saved_scene();
+    char preset_buffer[3];
+    itoa(preset, preset_buffer, 10);
+
+    // Parse selected preset title
+    char preset_title[40];
+    strcpy(preset_title, flash_scene_text(preset, 0));
+
+    // Print selected preset number and title
+    {
+        region_fill(&line[0], 0);
+        font_string_region_clip(&line[0], preset_buffer, 2, 0, 0xa, 0);
+        u8 pos = font_string_position(preset_buffer,
+                                      strlen(preset_buffer));
+        pos += font_string_position(" ", 1);
+        font_string_region_clip(&line[0],
+                                preset_title,
+                                pos + 2, 0, 0xa, 0);
+        region_draw(&line[0]);
+    }
+
+    // Menu items
+    tele_usb_disk_render_menu_line(kReadFile,          1, kBlank);
+    tele_usb_disk_render_menu_line(kWriteFile,         2, kBlank);
+    tele_usb_disk_render_menu_line(kWriteNextInSeries, 3, kBlank);
+    tele_usb_disk_render_menu_line(kBrowse,            4, kBlank);
+    tele_usb_disk_render_menu_line(kExit,              5, kCurrent);
+    menu_selection = 4;
+
+    // Help text
+    tele_usb_disk_render_menu_line(kHelpText,          7, kBlank);
 }
 
 void tele_usb_disk_finish() {
@@ -409,6 +414,8 @@ void tele_usb_disk() {
 
     // disable timers
     default_timers_enabled = false;
+
+    tele_usb_discover_filenames();
 
     tele_usb_disk_init();
 }
@@ -502,36 +509,6 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     }
 }
 
-#define DISK_BROWSE_PAGE_SIZE 7
-
-static int disk_browse_num_files;
-// static int disk_browse_num_pages;
-
-static void disk_browse_short_press(void) {
-}
-
-static void disk_browse_button_timeout(void) {
-    tele_usb_disk_render_line("<exit_browser>", 0, kSelected);
-}
-
-
-            // ARB:
-            // Redundant.  We could copy the existing handler on the way into
-            // the browser instead.
-
-static void handler_None(int32_t data) {}
-
-static void disk_browse_finish(void) {
-    nav_filelist_reset();
-    nav_exit();
-
-    app_event_handlers[kEventPollADC] = &handler_None;
-    tele_usb_disk_init();
-}
-
-static void disk_browse_long_press(void) {
-    disk_browse_finish();
-}
 static uint8_t read_scaled_param(uint8_t last_value, uint8_t scale) {
     // The knob seems to have a 12 bit range.  Division into more than 64 zones
     // is probably impractical.
@@ -583,6 +560,47 @@ static void disk_browse_read_filename(char *filename, int index) {
     }
 }
 
+#define DISK_BROWSE_PAGE_SIZE 7
+
+static int disk_browse_num_files;
+// static int disk_browse_num_pages;
+
+static void disk_browse_short_press(void) {
+}
+
+static void disk_browse_button_timeout(void) {
+    tele_usb_disk_render_line("<exit_browser>", 0, kSelected);
+}
+
+
+            // ARB:
+            // Redundant.  We could copy the existing handler on the way into
+            // the browser instead.
+
+static void handler_None(int32_t data) {}
+
+static void disk_browse_finish(void) {
+    nav_filelist_reset();
+    nav_exit();
+
+    app_event_handlers[kEventPollADC] = &handler_None;
+    tele_usb_disk_init();
+}
+
+static void disk_browse_long_press(void) {
+    uint8_t item = read_scaled_param(0, disk_browse_num_files);
+
+    // The save/load filename is the one selected.
+
+    disk_browse_read_filename(filename_buffer, item);
+
+    // We have a concrete file, so no concept of "save next in series".
+
+    nextname_buffer[0] = 0;
+
+    disk_browse_finish();
+}
+
 static void disk_browse_PollADC(int32_t data) {
     static int16_t last_knob = 0;
     uint16_t adc[4];
@@ -613,7 +631,8 @@ static void disk_browse_PollADC(int32_t data) {
                 itoa(first_entry + i, filename, 10);
                 strcat(filename, " ");
 
-                disk_browse_read_filename(filename + strlen(filename), first_entry + i);
+                disk_browse_read_filename(filename + strlen(filename),
+                                          first_entry + i);
                 tele_usb_disk_render_line(filename,
                                           i + 1,
                                           i == current_entry ? kCurrent
