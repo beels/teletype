@@ -271,9 +271,15 @@ void keyTimer_callback(void* o) {
 }
 
 void adcTimer_callback(void* o) {
+
+    // ARB:
+    // Is it safe to just cut this code out?
+
+#if 0  // usb browser uses ADC poll
     if (! default_timers_enabled) {
         return;
     }
+#endif
 
     event_t e = {.type = kEventPollADC, .data = 0 };
     event_post(&e);
