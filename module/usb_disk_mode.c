@@ -41,18 +41,21 @@ static void tele_usb_disk_finish(void);
 static void tele_usb_exec(void);
 static bool tele_usb_parse_target_filename(char *buffer, uint8_t preset);
 static bool tele_usb_disk_iterate_filename(char *output, char *pattern);
+static void tele_usb_disk_render_line(char *text, int line_no, int marker);
 static void tele_usb_disk_render_menu_line(int item, int line_no, int marker);
 static void tele_usb_disk_write_file(char *filename, int preset);
 static void tele_usb_disk_read_file(char *filename, int preset);
-static void tele_usb_disk_write_and_read(void);
+static void tele_usb_disk_browse_init(char *filename,
+                                      char *nextname,
+                                      int preset);
 
-static void main_menu_short_press();
-static void main_menu_button_timeout();
-static void main_menu_long_press();
+static void main_menu_short_press(void);
+static void main_menu_button_timeout(void);
+static void main_menu_long_press(void);
 
-static void (*short_press_action)();
-static void (*button_timeout_action)();
-static void (*long_press_action)();
+static void (*short_press_action)(void);
+static void (*button_timeout_action)(void);
+static void (*long_press_action)(void);
 
 void tele_usb_putc(void* self_data, uint8_t c) {
     file_putc(c);
@@ -70,7 +73,6 @@ bool tele_usb_eof(void* self_data) {
     return file_eof() != 0;
 }
 
-static int front_counter = 0;
 static int button_counter = 0;
 static bool long_press = false;
 static int menu_selection = 4;
@@ -87,7 +89,7 @@ enum {
     kReadFile = 0,
     kWriteFile,
     kWriteNextInSeries,
-    kLegacyWriteRead,
+    kBrowse,
     kExit
 };
 
@@ -116,7 +118,6 @@ void main_menu_button_timeout() {
 static
 void main_menu_long_press() {
     tele_usb_exec();
-    tele_usb_disk_finish();
 }
 
 void tele_usb_disk_handler_Front(int32_t data) {
@@ -139,14 +140,22 @@ void tele_usb_disk_handler_Front(int32_t data) {
 }
 
 void tele_usb_disk_handler_KeyTimer(int32_t data) {
+    // This `if` statement only stops the decrement, avoiding wraparound and or
+    // undefined behavior in the extreme case.  Arming of the long press action
+    // is triggered by passing through the value 1, and further decrements are
+    // harmless.
+
     if (0 < button_counter) {
         button_counter--;
     }
 
+    // Note that we arm the long press action on 1, not 0, because the button
+    // counter is initialized to 0.  We could as easily arm on 0 and initialize
+    // to -1, which would change the stop-decrement condition slightly.
+
     if (1 == button_counter) {
         // long press action
         button_counter = 0;
-
         long_press = true;
 
         (*button_timeout_action)();
@@ -154,8 +163,9 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 }
 
 void tele_usb_exec() {
+    uint8_t preset = flash_last_saved_scene();
+
     switch (menu_selection) {
-        uint8_t preset = flash_last_saved_scene();
         case kReadFile: {
             // Read from file
             tele_usb_disk_read_file(filename_buffer, preset);
@@ -168,21 +178,14 @@ void tele_usb_exec() {
             // Write to next file in series
             tele_usb_disk_write_file(nextname_buffer, preset);
         } break;
-        case kLegacyWriteRead: {
-            // Legacy action
-
-            // clear screen
-            for (size_t i = 0; i < 8; i++) {
-                region_fill(&line[i], 0);
-                region_draw(&line[i]);
-            }
-
-            // read/write files
-            tele_usb_disk_write_and_read();
+        case kBrowse: {
+            tele_usb_disk_browse_init(filename_buffer,
+                                      nextname_buffer,
+                                      preset);
         } break;
         case kExit: {
             // Exit
-            // do nothing
+            tele_usb_disk_finish();
             return;
         } break;
         default: {
@@ -217,7 +220,7 @@ bool tele_usb_disk_iterate_filename(char *output, char *pattern) {
         && nav_file_getname(output, FNAME_BUFFER_LEN);
 }
 
-void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
+void tele_usb_disk_render_line(char *text, int line_no, int marker) {
     char text_buffer[40];
     u8 gutter = font_string_position(">", 1) + 2;
 
@@ -232,97 +235,75 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
     else {
         strcpy(text_buffer, " ");
     }
+
     font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
 
-    switch (item) {
-        case kHelpText: { // Menu line 0: Read from file 'abcd.123'
-            strcpy(text_buffer, "short press: next; long: exec");
-
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-        case kReadFile: { // Menu line 0: Read from file 'abcd.123'
-            strcpy(text_buffer, "Read '");
-            strcat(text_buffer, filename_buffer);
-            strcat(text_buffer, "'");
-
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-
-        case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
-            strcpy(text_buffer, "Write '");
-            strcat(text_buffer, filename_buffer);
-            strcat(text_buffer, "'");
-
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-
-        case kWriteNextInSeries: { // Menu line 2: filename iterator
-            if (nextname_buffer[0]) {
-                strcpy(text_buffer, "Write '");
-                strcat(text_buffer, nextname_buffer);
-                strcat(text_buffer, "'");
-
-                font_string_region_clip(&line[line_no], text_buffer,
-                                        gutter + 2, 0, 0xa, 0);
-            }
-        } break;
-
-        case kLegacyWriteRead: { // Menu line 3: Legacy WRITE/READ operation
-            strcpy(text_buffer, "Legacy WRITE/READ operation");
-
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-
-        case kExit: { // Menu line 4: Exit USB disk mode
-            strcpy(text_buffer, "Exit USB disk mode");
-            font_string_region_clip(&line[line_no], text_buffer,
-                                    gutter + 2, 0, 0xa, 0);
-        } break;
-
-        default: {} break;
-    }
+    font_string_region_clip(&line[line_no], text, gutter + 2, 0, 0xa, 0);
 
     region_draw(&line[line_no]);
 }
 
+void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
+    switch (item) {
+        case kHelpText: { // Menu line 0: Read from file 'abcd.123'
+            tele_usb_disk_render_line("short press: next; long: exec",
+                                      line_no, marker);
+        } break;
+        case kReadFile: { // Menu line 0: Read from file 'abcd.123'
+            char text_buffer[40];
+            strcpy(text_buffer, "Read '");
+            strcat(text_buffer, filename_buffer);
+            strcat(text_buffer, "'");
+
+            tele_usb_disk_render_line(text_buffer, line_no, marker);
+        } break;
+
+        case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
+            char text_buffer[40];
+            strcpy(text_buffer, "Write '");
+            strcat(text_buffer, filename_buffer);
+            strcat(text_buffer, "'");
+
+            tele_usb_disk_render_line(text_buffer, line_no, marker);
+        } break;
+
+        case kWriteNextInSeries: { // Menu line 2: filename iterator
+            if (nextname_buffer[0]) {
+                char text_buffer[40];
+                strcpy(text_buffer, "Write '");
+                strcat(text_buffer, nextname_buffer);
+                strcat(text_buffer, "'");
+
+                tele_usb_disk_render_line(text_buffer, line_no, marker);
+            }
+        } break;
+
+        case kBrowse: { // Menu line 3: Browse filesystem
+            tele_usb_disk_render_line("Browse USB disk", line_no, marker);
+        } break;
+
+        case kExit: { // Menu line 4: Exit USB disk mode
+            tele_usb_disk_render_line("Exit USB disk mode", line_no, marker);
+        } break;
+
+        default: {} break;
+    }
+}
+
 void tele_usb_disk_init() {
-    // disable event handlers while doing USB write
-    assign_msc_event_handlers();
-
     // initial button handlers (main menu)
-    short_press_action = main_menu_short_press;
-    button_timeout_action = main_menu_button_timeout;
-    long_press_action = main_menu_long_press;
+    short_press_action = &main_menu_short_press;
+    button_timeout_action = &main_menu_button_timeout;
+    long_press_action = &main_menu_long_press;
 
-    // disable timers
-    default_timers_enabled = false;
+    button_counter = 0;
+    long_press = false;
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
         region_fill(&line[i], 0);
         region_draw(&line[i]);
     }
-
-    front_counter = 0;
-    button_counter = 0;
-}
-
-void tele_usb_disk_finish() {
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    default_timers_enabled = true;
-}
-
-// usb disk mode entry point
-void tele_usb_disk() {
-    print_dbg("\r\nusb");
-
-    tele_usb_disk_init();
 
     // We assume that there is one and only one available LUN, otherwise it is
     // not safe to iterate through all possible LUN even after we finish
@@ -343,14 +324,6 @@ void tele_usb_disk() {
 #endif
             continue;
         }
-
-
-            // ARB:
-            // We should take the title of the current scene here, not the
-            // title of the preset scene.  That is probably just a matter of
-            // looking at `scene_text[0]`.  However we may not have access to
-            // the current scene number at all.  In that case, how about just
-            // not using the scene number?
 
         // Parse selected preset number
         uint8_t preset = flash_last_saved_scene();
@@ -406,7 +379,7 @@ void tele_usb_disk() {
         tele_usb_disk_render_menu_line(kReadFile,          1, kBlank);
         tele_usb_disk_render_menu_line(kWriteFile,         2, kBlank);
         tele_usb_disk_render_menu_line(kWriteNextInSeries, 3, kBlank);
-        tele_usb_disk_render_menu_line(kLegacyWriteRead,   4, kBlank);
+        tele_usb_disk_render_menu_line(kBrowse,            4, kBlank);
         tele_usb_disk_render_menu_line(kExit,              5, kCurrent);
         menu_selection = 4;
 
@@ -415,6 +388,26 @@ void tele_usb_disk() {
 
         break;
     }
+}
+
+void tele_usb_disk_finish() {
+    // renable teletype
+    set_mode(M_LIVE);
+    assign_main_event_handlers();
+    default_timers_enabled = true;
+}
+
+// usb disk mode entry point
+void tele_usb_disk() {
+    print_dbg("\r\nusb");
+
+    // disable event handlers while doing USB write
+    assign_msc_event_handlers();
+
+    // disable timers
+    default_timers_enabled = false;
+
+    tele_usb_disk_init();
 }
 
 void tele_usb_disk_write_file(char *filename, int preset) {
@@ -506,88 +499,43 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     }
 }
 
-void tele_usb_disk_write_and_read() {
-    // WRITE SCENES
-    char text_buffer[40];
-    char filename[FNAME_BUFFER_LEN];
-    strcpy(filename, "tt00s.txt");
+static void disk_browse_short_press(void) {
+    static int state = 0;
 
-    print_dbg("\r\nwriting scenes");
-    strcpy(text_buffer, "WRITE");
-    region_fill(&line[0], 0);
-    font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[0]);
+    if (++state % 2) {
+        tele_usb_disk_render_line("==============", 0, kCurrent);
+    }
+    else {
+        tele_usb_disk_render_line("<exit_browser>", 0, kCurrent);
+    }
+}
 
-    for (int i = 0; i < SCENE_SLOTS; i++) {
-        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                   // buffer is large enough!
-        region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+static void disk_browse_button_timeout(void) {
+    tele_usb_disk_render_line("<exit_browser>", 0, kSelected);
+}
 
-        tele_usb_disk_write_file(filename, i);
+static void disk_browse_long_press(void) {
+    tele_usb_disk_init();
+}
 
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
-        }
-        else
-            filename[3]++;
+static void tele_usb_disk_browse_init(char *filename,
+                                      char *nextname,
+                                      int preset)
+{
+    // Set event handlers
+    short_press_action = &disk_browse_short_press;
+    button_timeout_action = &disk_browse_button_timeout;
+    long_press_action = &disk_browse_long_press;
 
-        print_dbg(".");
+    button_counter = 0;
+    long_press = false;
+
+    // clear screen
+    for (size_t i = 0; i < 8; i++) {
+        region_fill(&line[i], 0);
+        region_draw(&line[i]);
     }
 
-    nav_filelist_reset();
-
-
-    // READ SCENES
-    strcpy(filename, "tt00.txt");
-    print_dbg("\r\nreading scenes...");
-
-    strcpy(text_buffer, "READ");
-    region_fill(&line[1], 0);
-    font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[1]);
-
-    for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                   // buffer is large enough!
-        region_fill(&line[1], 0);
-        font_string_region_clip(&line[1], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[1]);
-        if (nav_filelist_findname(filename, 0)) {
-            print_dbg("\r\nfound: ");
-            print_dbg(filename);
-            if (!file_open(FOPEN_MODE_R))
-                print_dbg("\r\ncan't open");
-            else {
-                tt_deserializer_t tele_usb_reader;
-                tele_usb_reader.read_char = &tele_usb_getc;
-                tele_usb_reader.eof = &tele_usb_eof;
-                tele_usb_reader.print_dbg = &print_dbg;
-                tele_usb_reader.data =
-                    NULL;  // asf disk i/o holds state, no handles needed
-                deserialize_scene(&tele_usb_reader, &scene, &text);
-
-                file_close();
-                flash_write(i, &scene, &text);
-            }
-        }
-
-        nav_filelist_reset();
-
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
-        }
-        else
-            filename[3]++;
-    }
-
-    nav_exit();
+    // render browser
+    tele_usb_disk_render_line("<exit_browser>", 0, kCurrent);
 }
