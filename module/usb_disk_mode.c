@@ -641,16 +641,8 @@ static void disk_browse_PollADC(int32_t data) {
                 region_draw(&line[i + 1]);
             }
             else if (update_page || i == current_entry || i == last_entry) {
-                char filename[40];
-                itoa(first_entry + i, filename, 10);
-                strcat(filename, " ");
-
-                // ARB:
-                // We rely here on knowing that the number of digits in the
-                // index + FNAME_BUFFER_LEN is less than 40.
-
-                disk_browse_read_filename(filename + strlen(filename),
-                                          first_entry + i);
+                char filename[FNAME_BUFFER_LEN];
+                disk_browse_read_filename(filename, first_entry + i);
                 tele_usb_disk_render_line(filename,
                                           i + 1,
                                           (i == current_entry) ? kCurrent
