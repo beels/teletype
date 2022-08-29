@@ -40,7 +40,7 @@
 #include "flash.h"
 #include "globals.h"
 #include "grid.h"
-#include "help_mode.h"
+//#include "help_mode.h"
 #include "keyboard_helper.h"
 #include "live_mode.h"
 #include "pattern_mode.h"
@@ -381,7 +381,7 @@ void handler_Front(int32_t data) {
 
         if (grid_connected) {
             grid_control_mode = !grid_control_mode;
-            if (grid_control_mode && mode == M_HELP) set_mode(M_LIVE);
+            //if (grid_control_mode && mode == M_HELP) set_mode(M_LIVE);
             grid_set_control_mode(grid_control_mode, mode, &scene_state);
             return;
         }
@@ -520,7 +520,7 @@ void handler_ScreenRefresh(int32_t data) {
         case M_PATTERN: screen_dirty = screen_refresh_pattern(); break;
         case M_PRESET_W: screen_dirty = screen_refresh_preset_w(); break;
         case M_PRESET_R: screen_dirty = screen_refresh_preset_r(); break;
-        case M_HELP: screen_dirty = screen_refresh_help(); break;
+        //case M_HELP: screen_dirty = screen_refresh_help(); break;
         case M_LIVE: screen_dirty = screen_refresh_live(); break;
         case M_EDIT: screen_dirty = screen_refresh_edit(); break;
     }
@@ -583,7 +583,7 @@ static void handler_MonomeConnect(s32 data) {
     timers_set_monome();
     grid_connected = 1;
 
-    if (grid_control_mode && mode == M_HELP) set_mode(M_LIVE);
+    //if (grid_control_mode && mode == M_HELP) set_mode(M_LIVE);
     grid_set_control_mode(grid_control_mode, mode, &scene_state);
 
     scene_state.grid.grid_dirty = 1;
@@ -783,12 +783,14 @@ void set_mode(tele_mode_t m) {
             set_preset_r_mode(adc[1] >> 7);
             mode = M_PRESET_R;
             break;
+#if 0
         case M_HELP:
             set_help_mode();
             mode = M_HELP;
             break;
+#endif
     }
-    if (mode != M_HELP) flash_update_last_mode(mode);
+    //if (mode != M_HELP) flash_update_last_mode(mode);
 }
 
 // defined in globals.h
@@ -842,7 +844,7 @@ void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
         case M_PRESET_R:
             process_preset_r_keys(key, mod_key, is_held_key);
             break;
-        case M_HELP: process_help_keys(key, mod_key, is_held_key); break;
+        //case M_HELP: process_help_keys(key, mod_key, is_held_key); break;
     }
 }
 
@@ -879,6 +881,7 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
         if (!is_held_key) clear_delays_and_slews(&scene_state);
         return true;
     }
+#if 0
     // <alt>-?: help text, or return to last mode
     else if (match_shift_alt(m, k, HID_SLASH) || match_alt(m, k, HID_H)) {
         if (mode == M_HELP)
@@ -888,6 +891,7 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
         }
         return true;
     }
+#endif
     // <F1> through <F8>: run corresponding script
     // <F9>: run metro script
     // <F10>: run init script
