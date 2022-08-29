@@ -66,6 +66,7 @@ CSRCS = \
 	../module/flash.c					\
 	../module/gitversion.c					\
 	../module/grid.c						\
+	../module/help_mode.c  					\
 	../module/line_editor.c					\
 	../module/live_mode.c   				\
 	../module/pattern_mode.c   				\
@@ -169,8 +170,6 @@ CSRCS = \
 	common/services/spi/uc3_spi/spi_master.c		\
 	common/services/usb/uhc/uhc.c				\
 	common/services/clock/uc3b0_b1/sysclk.c
-#	../module/help_mode.c  					\
-#
 
 # List of assembler source files.
 ASSRCS = \
