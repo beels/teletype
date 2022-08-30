@@ -700,8 +700,6 @@ static void tele_usb_disk_browse_init(char *filename,
         region_draw(&line[i]);
     }
 
-    sort_build_index();
-
     nav_filelist_single_enable(FS_FILE);
     disk_browse_num_files = nav_filelist_nb(FS_FILE);
     // disk_browse_num_pages =

@@ -10,6 +10,7 @@
 #include "teletype_io.h"
 #include "turtle_tests.h"
 #include "filename_tests.h"
+#include "sort_tests.h"
 
 uint32_t tele_get_ticks() {
     return 0;
