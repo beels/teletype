@@ -647,6 +647,32 @@ static void disk_browse_PollADC(int32_t data) {
                                           i + 1,
                                           (i == current_entry) ? kCurrent
                                                                : kBlank);
+
+                if (i == current_entry) {
+                    // Display title on line 0
+
+                    region_fill(&line[0], 0x2);
+
+                    if (file_open(FOPEN_MODE_R)) {
+                        uint8_t title[FNAME_BUFFER_LEN + 1];
+                        file_read_buf(title, FNAME_BUFFER_LEN);
+                        title[FNAME_BUFFER_LEN] = 0;
+                        file_close();
+                        for (int j = 0; j < FNAME_BUFFER_LEN; ++j) {
+                            if (title[j] == '\n') {
+                                title[j] = 0;
+                                break;
+                            }
+                            else if (title[j] < ' ' || '~' < title[j]) {
+                                title[j] = '.';
+                            }
+                        }
+
+                        font_string_region_clip(
+                                &line[0], (char *) title, 2, 0, 0xa, 0x2);
+                    }
+                    region_draw(&line[0]);
+                }
             }
         }
 
