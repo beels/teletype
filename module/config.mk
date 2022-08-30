@@ -86,6 +86,7 @@ CSRCS = \
 	../src/turtle.c					\
 	../src/chaos.c					\
 	../src/filename.c					\
+	../src/sort.c					\
 	../src/ops/op.c						\
 	../src/ops/ansible.c					\
 	../src/ops/controlflow.c				\

@@ -58,6 +58,7 @@ int main(int argc, char **argv) {
     RUN_SUITE(turtle_suite);
     RUN_SUITE(serialize_scene_suite);
     RUN_SUITE(filename_suite);
+    RUN_SUITE(sort_suite);
 
     GREATEST_MAIN_END();
 }
