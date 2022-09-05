@@ -17,8 +17,14 @@ TEST sort_initialize_test() {
     sort_initialize(&index);
 
     for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
+        uint8_t v = index.values[i];
+        printf("%3d: %3d . %3d\n", i, index.index[v], v);
+    }
+
+    for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
         char item[4];
         itoa(i, item, 10);
+        printf("%3d: %3d . %3d\n", i, index.index[index.values[i]], index.values[i]);
         ASSERT_EQm(item, false, sort_validate_slot(&index, i));
     }
 
@@ -653,7 +659,7 @@ TEST sort_build_index_test_0() {
         {  3, "iiiiiiii" },
     };
 
-#if 1
+#if 0
     for (int i = 0; i < n; ++i) {
         printf("%d: %d -> %d: %s\n", i,
                                      index.index[index.values[i]],
@@ -730,7 +736,7 @@ TEST sort_build_index_test_1() {
         {  3, "iiiiiiii" },
     };
 
-#if 1
+#if 0
     for (int i = 0; i < n; ++i) {
         printf("%d: %d -> %d: %s\n", i,
                                      index.index[index.values[i]],
@@ -803,7 +809,7 @@ TEST sort_build_index_test_2() {
         {  3, "iiiiiiii" },
     };
 
-#if 1
+#if 0
     for (int i = 0; i < n; ++i) {
         printf("%d: %d -> %d: %s\n", i,
                                      index.index[index.values[i]],
@@ -878,7 +884,7 @@ TEST sort_build_index_test_3() {
         {  3, "iiiiiiii" },
     };
 
-#if 1
+#if 0
     for (int i = 0; i < n; ++i) {
         printf("%d: %d -> %d: %s\n", i,
                                      index.index[index.values[i]],
@@ -915,11 +921,11 @@ TEST sort_build_index_test_3() {
 bool make_string_from_index(sort_accessor_t *self,
                             char *buffer, int len, uint8_t index)
 {
-    uint8_t value = 255 - index;
+    int value = 1000 + 255 - index;
 
-    char temp[4];
+    char temp[5];
     itoa(value, temp, 10);
-    strncpy(buffer, temp, len);
+    strncpy(buffer, temp + 1, len);
 
     return true;
 }
@@ -931,7 +937,7 @@ TEST sort_build_index_test_4() {
 
     sort_initialize(&index);
 
-    int n = 10;
+    int n = 256;
 
     sort_accessor_t accessor = { .data = 0,
                                  .get_string = make_string_from_index };

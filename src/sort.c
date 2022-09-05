@@ -5,8 +5,56 @@
 
 void sort_clear_slot(sort_index_t *index, uint8_t slot)
 {
-    index->values[slot] = slot;
-    index->index[slot] = slot + 1;
+    // for (uint8_t i = index->values[slot]; index->index[i] == slot; ++i) {
+    //     index->values[slot] = i + 1;
+    // }
+
+    if (!sort_validate_slot(index, slot)) {
+        // This slot is already cleared, so there is nothing to do.
+
+        return;
+    }
+
+    // Get an arbitrary slot and an arbitrary value distinct from the current
+    // (valid) slot/value pair.
+
+    uint8_t value = index->values[slot];
+
+    uint8_t v = value + 1;
+    uint8_t i = slot + 1;
+
+    if (index->index[v] != slot) {
+        // The new value is listed as not being stored in this slot.  Using
+        // that value will invalidate this slot, with no influence on whatever
+        // location might legitimately hold that value.
+
+        index->values[slot] = v;
+        return;
+    }
+
+    if (index->values[i] != value) {
+        // The new slot is listed as not holding this value.  Using that slot
+        // will invalidate this value, with no influence on whatever value
+        // might legitimately be stored in that location.
+
+        index->index[value] = i;
+        return;
+    }
+
+    // If we get here, then
+    //
+    // ```
+    // index->index[v] == slot && index->values[i] == value
+    // ```
+    //
+    // We have discovered an invalid value and an invalid slot.  We can make
+    // the current slot invalid by cross-referencing the two values and two
+    // slots.
+
+    index->index[v] = slot;
+    index->values[i] = v;
+    index->index[value] = i;
+    index->values[slot] = value;
 }
 
 void sort_set_slot(sort_index_t *index, uint8_t value, uint8_t slot)
@@ -28,7 +76,12 @@ bool sort_validate_value(sort_index_t *index, uint8_t value)
 void sort_initialize(sort_index_t *index)
 {
     for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
+#if 0
+        index->values[i] = i;
+        index->index[i] = i + 1;
+#else
         sort_clear_slot(index, i);
+#endif
     }
 }
 
@@ -136,6 +189,7 @@ void sort_build_index(sort_index_t    *index,
             work_buffer[i][0] = 0;
         }
 
+
         for (int i = 0; i < num_entries; ++i) {
             if (sort_validate_value(index, i)) {
 #if 0
@@ -145,6 +199,47 @@ void sort_build_index(sort_index_t    *index,
 #endif
                 continue;
             }
+#if 0
+            else {
+                printf("inserting %d\n", i);
+
+                printf("--------------------\n");
+
+                for (int k = 0; k < 256; ++k) {
+                    if (   k < num_entries
+                        || 256 - num_entries <= 255 - index->values[k])
+                    {
+                        printf("S %3d: %3d -> %3d: %3d %c %c\n", k,
+                                             index->index[index->values[k]],
+                                             index->values[k],
+                                             255 - index->values[k],
+                                             sort_validate_slot(index, k)
+                                                 ? 'S' : ' ',
+                                             sort_validate_value(
+                                                     index, 
+                                                     index->values[k])
+                                                 ? 'V' : ' ');
+                    }
+                }
+
+                for (int k = 0; k < 256; ++k) {
+                    if (index->index[k] < num_entries) {
+                        // show value-centric view
+                        printf("V %3d (%3d): %3d -> %3d: %3d %c %c\n",
+                                k, 255 - k,
+                                index->index[k],
+                                index->values[index->index[k]],
+                                255 - index->values[index->index[k]],
+                                sort_validate_slot(index, index->index[k])
+                                    ? 'S' : ' ',
+                                sort_validate_value(index, k)
+                                    ? 'V' : ' ');
+                    }
+                }
+
+                printf("--------------------\n");
+            }
+#endif
 
             char temp[SORT_STRING_BUFFER_SIZE];
             if (accessor->get_string(accessor,
