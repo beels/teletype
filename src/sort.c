@@ -42,12 +42,17 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
                         uint8_t       string_index,
                         char         *string)
 {
-    uint8_t first_index_slot = page * buffer_len;
-    uint8_t target_index_slot = first_index_slot;
+    int first_index_slot = page * buffer_len;
+    int target_index_slot = first_index_slot;
 
     // Find a slot that `string` is less than.
 
-    while (target_index_slot < first_index_slot + buffer_len
+
+            // ARB:
+            // We shouldn't really need the 'num_entries' tests below.
+
+    while (   target_index_slot < num_entries
+           && target_index_slot < first_index_slot + buffer_len
            && sort_validate_slot(index, target_index_slot)
            && 0 < strncmp(string,
                           buffer[target_index_slot - first_index_slot],
@@ -56,7 +61,9 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
         ++target_index_slot;
     }
 
-    if (target_index_slot >= first_index_slot + buffer_len) {
+    if (   target_index_slot >= first_index_slot + buffer_len
+        || target_index_slot >= num_entries)
+    {
         // This item is sorted beyond our range
 
         return;
@@ -74,6 +81,10 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
              target_index_slot - first_index_slot < i;
              --i)
         {
+            if (first_index_slot + i >= num_entries) {
+                continue;
+            }
+
             if (sort_validate_slot(index, first_index_slot + i - 1)) {
                 sort_set_slot(index,
                               index->values[first_index_slot + i - 1],
@@ -114,7 +125,9 @@ void sort_build_index(sort_index_t    *index,
 
     for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page)
     {
-printf("page %d\n", page);
+#if 0
+        printf("page %d\n", page);
+#endif
             // ARB:
             // This isn't really necessary, since the slot validation will keep
             // us from looking at unwritten buffer entries.

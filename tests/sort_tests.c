@@ -385,7 +385,7 @@ TEST sort_insert_string_test_4() {
                            BATCH_SIZE,
                            &index,
                            0,
-                           5,
+                           8,
                            input[i].index,
                            input[i].string);
     }
@@ -540,7 +540,7 @@ TEST sort_insert_string_test_6() {
                            BATCH_SIZE,
                            &index,
                            2,
-                           5,
+                           15,
                            input[i].index,
                            input[i].string);
     }
@@ -931,36 +931,34 @@ TEST sort_build_index_test_4() {
 
     sort_initialize(&index);
 
-    int n = 256;
+    int n = 10;
 
     sort_accessor_t accessor = { .data = 0,
                                  .get_string = make_string_from_index };
 
     sort_build_index(&index, n, &accessor);
 
-#if 0
+#if 1
     for (int i = 0; i < n; ++i) {
+        char temp[4];
+        make_string_from_index(0, temp, 4, index.values[i]);
         printf("%d: %d -> %d: %s\n", i,
                                      index.index[index.values[i]],
                                      index.values[i],
-                                     "" /* work_buffer[i] */);
-    }
-
-    for (int i = n; i < 12; ++i) {
-        printf("%d: %d -> %d\n", i,
-                                 index.index[index.values[i]],
-                                 index.values[i]);
+                                     temp);
     }
 #endif
 
+#if 1
     for (int i = 0; i < n; ++i) {
         char item[4];
         itoa(i, item, 10);
 
-        ASSERT_EQm(item, 255 - i, index.values[i]);
-        ASSERT_EQm(item, i, index.index[255 - i]);
+        ASSERT_EQm(item, n - 1 - i, index.values[i]);
+        ASSERT_EQm(item, i, index.index[n - 1 - i]);
         ASSERT_EQm(item, true, sort_validate_slot(&index, i));
     }
+#endif
 
     PASS();
 }
