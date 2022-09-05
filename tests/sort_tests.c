@@ -17,14 +17,8 @@ TEST sort_initialize_test() {
     sort_initialize(&index);
 
     for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
-        uint8_t v = index.values[i];
-        printf("%3d: %3d . %3d\n", i, index.index[v], v);
-    }
-
-    for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
         char item[4];
         itoa(i, item, 10);
-        printf("%3d: %3d . %3d\n", i, index.index[index.values[i]], index.values[i]);
         ASSERT_EQm(item, false, sort_validate_slot(&index, i));
     }
 
@@ -404,22 +398,6 @@ TEST sort_insert_string_test_4() {
         {  0, "eeeeeeee" },
     };
 
-#if 0
-    for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     work_buffer[i]);
-    }
-
-    for (int i = sizeof(result) / sizeof(*result); i < 12; ++i) {
-        printf("%d: %d -> %d: (%d)\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     strlen(work_buffer[i]));
-    }
-#endif
-
     for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
         char item[4];
         itoa(i, item, 10);
@@ -477,22 +455,6 @@ TEST sort_insert_string_test_5() {
         {    7, "hello" },
         {   11, "oy" },
     };
-
-#if 0
-    for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     work_buffer[i]);
-    }
-
-    for (int i = sizeof(result) / sizeof(*result); i < 12; ++i) {
-        printf("%d: %d -> %d: (%d)\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     strlen(work_buffer[i]));
-    }
-#endif
 
     for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
         char item[4];
@@ -558,22 +520,6 @@ TEST sort_insert_string_test_6() {
         {  2, "dddddddd" },
         {  0, "eeeeeeee" },
     };
-
-#if 0
-    for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     work_buffer[i]);
-    }
-
-    for (int i = sizeof(result) / sizeof(*result); i < 12; ++i) {
-        printf("%d: %d -> %d: (%d)\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     strlen(work_buffer[i]));
-    }
-#endif
 
     for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
         char item[4];
@@ -659,21 +605,6 @@ TEST sort_build_index_test_0() {
         {  3, "iiiiiiii" },
     };
 
-#if 0
-    for (int i = 0; i < n; ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     "" /* work_buffer[i] */);
-    }
-
-    for (int i = n; i < 12; ++i) {
-        printf("%d: %d -> %d\n", i,
-                                 index.index[index.values[i]],
-                                 index.values[i]);
-    }
-#endif
-
     for (int i = 0; i < n; ++i) {
         char item[4];
         itoa(i, item, 10);
@@ -736,21 +667,6 @@ TEST sort_build_index_test_1() {
         {  3, "iiiiiiii" },
     };
 
-#if 0
-    for (int i = 0; i < n; ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     "" /* work_buffer[i] */);
-    }
-
-    for (int i = n; i < 12; ++i) {
-        printf("%d: %d -> %d\n", i,
-                                 index.index[index.values[i]],
-                                 index.values[i]);
-    }
-#endif
-
     for (int i = 0; i < n; ++i) {
         char item[4];
         itoa(i, item, 10);
@@ -808,21 +724,6 @@ TEST sort_build_index_test_2() {
         {  4, "gggggggg" },
         {  3, "iiiiiiii" },
     };
-
-#if 0
-    for (int i = 0; i < n; ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     "" /* work_buffer[i] */);
-    }
-
-    for (int i = n; i < 12; ++i) {
-        printf("%d: %d -> %d\n", i,
-                                 index.index[index.values[i]],
-                                 index.values[i]);
-    }
-#endif
 
     for (int i = 0; i < n; ++i) {
         char item[4];
@@ -884,21 +785,6 @@ TEST sort_build_index_test_3() {
         {  3, "iiiiiiii" },
     };
 
-#if 0
-    for (int i = 0; i < n; ++i) {
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     "" /* work_buffer[i] */);
-    }
-
-    for (int i = n; i < 12; ++i) {
-        printf("%d: %d -> %d\n", i,
-                                 index.index[index.values[i]],
-                                 index.values[i]);
-    }
-#endif
-
     for (int i = 0; i < n; ++i) {
         char item[4];
         itoa(i, item, 10);
@@ -944,18 +830,6 @@ TEST sort_build_index_test_4() {
 
     sort_build_index(&index, n, &accessor);
 
-#if 1
-    for (int i = 0; i < n; ++i) {
-        char temp[4];
-        make_string_from_index(0, temp, 4, index.values[i]);
-        printf("%d: %d -> %d: %s\n", i,
-                                     index.index[index.values[i]],
-                                     index.values[i],
-                                     temp);
-    }
-#endif
-
-#if 1
     for (int i = 0; i < n; ++i) {
         char item[4];
         itoa(i, item, 10);
@@ -964,7 +838,6 @@ TEST sort_build_index_test_4() {
         ASSERT_EQm(item, i, index.index[n - 1 - i]);
         ASSERT_EQm(item, true, sort_validate_slot(&index, i));
     }
-#endif
 
     PASS();
 }

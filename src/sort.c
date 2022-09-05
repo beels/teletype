@@ -5,10 +5,6 @@
 
 void sort_clear_slot(sort_index_t *index, uint8_t slot)
 {
-    // for (uint8_t i = index->values[slot]; index->index[i] == slot; ++i) {
-    //     index->values[slot] = i + 1;
-    // }
-
     if (!sort_validate_slot(index, slot)) {
         // This slot is already cleared, so there is nothing to do.
 
@@ -51,7 +47,7 @@ void sort_clear_slot(sort_index_t *index, uint8_t slot)
     // the current slot invalid by cross-referencing the two values and two
     // slots.
 
-    index->index[v] = slot;
+    // index->index[v] = slot;  // Not necessary; this value is aready set.
     index->values[i] = v;
     index->index[value] = i;
     index->values[slot] = value;
@@ -75,17 +71,27 @@ bool sort_validate_value(sort_index_t *index, uint8_t value)
 
 void sort_initialize(sort_index_t *index)
 {
-    for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
 #if 0
+    // Either of these obvious approaches would also work, but at greater
+    // cost.
+
+#if 0
+    for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
+        sort_clear_slot(index, i);
+    }
+#else
+    for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
         index->values[i] = i;
         index->index[i] = i + 1;
-#else
-        sort_clear_slot(index, i);
-#endif
     }
+#endif
+#else
+    memset(index->values, 0, SORT_BUFFER_LEN);
+    memset(index->index, 0, SORT_BUFFER_LEN);
+    index->index[0] = 1;
+    index->values[1] = 1;
+#endif
 }
-
-#define SORT_BATCH_SIZE 7
 
 void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
                         int           buffer_len,
@@ -100,12 +106,7 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
 
     // Find a slot that `string` is less than.
 
-
-            // ARB:
-            // We shouldn't really need the 'num_entries' tests below.
-
-    while (   target_index_slot < num_entries
-           && target_index_slot < first_index_slot + buffer_len
+    while (   target_index_slot < first_index_slot + buffer_len
            && sort_validate_slot(index, target_index_slot)
            && 0 < strncmp(string,
                           buffer[target_index_slot - first_index_slot],
@@ -114,9 +115,7 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
         ++target_index_slot;
     }
 
-    if (   target_index_slot >= first_index_slot + buffer_len
-        || target_index_slot >= num_entries)
-    {
+    if (target_index_slot >= first_index_slot + buffer_len) {
         // This item is sorted beyond our range
 
         return;
@@ -163,10 +162,7 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
     sort_set_slot(index, string_index, target_index_slot);
 }
 
-
-            // ARB:
-            // num_entries is the total number of inputs (i.e., files in the
-            // directory).
+#define SORT_BATCH_SIZE 7
 
 void sort_build_index(sort_index_t    *index,
                       int              num_entries,
@@ -178,68 +174,10 @@ void sort_build_index(sort_index_t    *index,
 
     for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page)
     {
-#if 0
-        printf("page %d\n", page);
-#endif
-            // ARB:
-            // This isn't really necessary, since the slot validation will keep
-            // us from looking at unwritten buffer entries.
-
-        for (int i = 0; i < SORT_BATCH_SIZE; ++i) {
-            work_buffer[i][0] = 0;
-        }
-
-
         for (int i = 0; i < num_entries; ++i) {
             if (sort_validate_value(index, i)) {
-#if 0
-                printf("skipping %d: %d -> %d\n", i,
-                                     index->index[i],
-                                     index->values[index->index[i]]);
-#endif
                 continue;
             }
-#if 0
-            else {
-                printf("inserting %d\n", i);
-
-                printf("--------------------\n");
-
-                for (int k = 0; k < 256; ++k) {
-                    if (   k < num_entries
-                        || 256 - num_entries <= 255 - index->values[k])
-                    {
-                        printf("S %3d: %3d -> %3d: %3d %c %c\n", k,
-                                             index->index[index->values[k]],
-                                             index->values[k],
-                                             255 - index->values[k],
-                                             sort_validate_slot(index, k)
-                                                 ? 'S' : ' ',
-                                             sort_validate_value(
-                                                     index, 
-                                                     index->values[k])
-                                                 ? 'V' : ' ');
-                    }
-                }
-
-                for (int k = 0; k < 256; ++k) {
-                    if (index->index[k] < num_entries) {
-                        // show value-centric view
-                        printf("V %3d (%3d): %3d -> %3d: %3d %c %c\n",
-                                k, 255 - k,
-                                index->index[k],
-                                index->values[index->index[k]],
-                                255 - index->values[index->index[k]],
-                                sort_validate_slot(index, index->index[k])
-                                    ? 'S' : ' ',
-                                sort_validate_value(index, k)
-                                    ? 'V' : ' ');
-                    }
-                }
-
-                printf("--------------------\n");
-            }
-#endif
 
             char temp[SORT_STRING_BUFFER_SIZE];
             if (accessor->get_string(accessor,
