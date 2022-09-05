@@ -553,22 +553,35 @@ static int read_scaled_param(int last_value, uint8_t scale) {
     return value;
 }
 
-static void disk_browse_read_filename(char *filename, int index) {
+static bool disk_browse_read_filename(sort_accessor_t *dummy,
+                                      char *filename, int len, uint8_t index) {
     if (nav_filelist_goto(index)
         && nav_filelist_validpos()
-        && nav_file_getname(filename, FNAME_BUFFER_LEN))
+        && nav_file_getname(filename, len))
     {
         // Success
-        return;
+        return true;
     }
     else {
         // Clear file name.
+        filename[0] = 0;
+        return false;
+    }
+}
+
+static void disk_browse_read_sorted_filename(
+                  sort_index_t *index, char *filename, int len, int position) {
+    if (sort_validate_slot(index, position)) {
+        disk_browse_read_filename(0, filename, len, index->values[position]);
+    }
+    else {
         filename[0] = 0;
     }
 }
 
 #define DISK_BROWSE_PAGE_SIZE 7
 
+static sort_index_t s_file_index;
 static int disk_browse_num_files;
 static bool disk_browse_force_render;
 // static int disk_browse_num_pages;
@@ -584,7 +597,8 @@ static void disk_browse_button_timeout(void) {
     // All of these `char x[40]` buffers need to be re-evaluated.
 
     char filename[40];
-    disk_browse_read_filename(filename, index);
+    disk_browse_read_sorted_filename(
+            &s_file_index, filename, FNAME_BUFFER_LEN, index);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);
 }
 
@@ -608,7 +622,8 @@ static void disk_browse_long_press(void) {
 
     // The save/load filename is the one selected.
 
-    disk_browse_read_filename(filename_buffer, item);
+    disk_browse_read_sorted_filename(&s_file_index,
+            filename_buffer, FNAME_BUFFER_LEN, item);
 
     // We have a concrete file, so no concept of "save next in series".
 
@@ -643,7 +658,10 @@ static void disk_browse_PollADC(int32_t data) {
             }
             else if (update_page || i == current_entry || i == last_entry) {
                 char filename[FNAME_BUFFER_LEN];
-                disk_browse_read_filename(filename, first_entry + i);
+                disk_browse_read_sorted_filename(&s_file_index,
+                                                 filename,
+                                                 FNAME_BUFFER_LEN,
+                                                 first_entry + i);
                 tele_usb_disk_render_line(filename,
                                           i + 1,
                                           (i == current_entry) ? kCurrent
@@ -711,6 +729,18 @@ static void tele_usb_disk_browse_init(char *filename,
     itoa(disk_browse_num_files, text_buffer, 10);
     strcat(text_buffer, " files total");
     tele_usb_disk_render_line(text_buffer, 0, kBlank);
+
+    // Create file index
+    // We borrow the copy buffer for temporary storage of the file index.
+    s_file_index.index = (uint8_t *) copy_buffer;
+    s_file_index.values = ((uint8_t *) copy_buffer) + 256;
+
+    sort_accessor_t filename_accessor = {
+                        .data = 0,
+                        .get_string = disk_browse_read_filename
+                    };
+
+    sort_build_index(&s_file_index, disk_browse_num_files, &filename_accessor);
 
     // Force rendering of current page.
     disk_browse_force_render = true;
