@@ -102,51 +102,41 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
                         char         *string)
 {
     int first_index_slot = page * buffer_len;
-    int target_index_slot = first_index_slot;
+    int offset = 0;
 
     // Find a slot that `string` is less than.
 
-    while (   target_index_slot < first_index_slot + buffer_len
-           && sort_validate_slot(index, target_index_slot)
-           && 0 < strncmp(string,
-                          buffer[target_index_slot - first_index_slot],
-                          SORT_STRING_BUFFER_SIZE))
+    while (   offset < buffer_len
+           && sort_validate_slot(index, first_index_slot + offset)
+           && 0 < strncmp(string, buffer[offset], SORT_STRING_BUFFER_SIZE))
     {
-        ++target_index_slot;
+        ++offset;
     }
 
-    if (target_index_slot >= first_index_slot + buffer_len) {
+    if (buffer_len <= offset) {
         // This item is sorted beyond our range
 
         return;
     }
 
-    int target_buffer_slot = target_index_slot - first_index_slot;
-
-    if (sort_validate_slot(index, target_index_slot)) {
+    if (sort_validate_slot(index, first_index_slot + offset)) {
         // The target slot is occupied.  Shift everything down.
 
         // First figure out how many slots need shifting.  It's from the
         // current position to the end of the page.
 
-        for (int i = buffer_len - 1;
-             target_index_slot - first_index_slot < i;
-             --i)
-        {
-            if (first_index_slot + i >= num_entries) {
+        for (int i = buffer_len - 1; offset < i; --i) {
+            int destination_slot = first_index_slot + i;
+            if (num_entries <= destination_slot) {
                 continue;
             }
 
-            if (sort_validate_slot(index, first_index_slot + i - 1)) {
+            if (sort_validate_slot(index, destination_slot - 1)) {
                 sort_set_slot(index,
-                              index->values[first_index_slot + i - 1],
-                              first_index_slot + i);
-            }
-            else {
-                sort_clear_slot(index, first_index_slot + i);
+                              index->values[destination_slot - 1],
+                              destination_slot);
             }
 
-            // ARB:
             // These calls to strncpy might be able to be pulled out of the
             // loop and replaced with a single call to memcpy or memmove.
 
@@ -156,13 +146,13 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
 
     // The target slot is empty.  Fill it.
 
-    strncpy(buffer[target_buffer_slot], string, SORT_STRING_BUFFER_SIZE);
-    buffer[target_buffer_slot][SORT_MAX_STRING_LEN] = 0;
+    strncpy(buffer[offset], string, SORT_STRING_BUFFER_SIZE);
+    buffer[offset][SORT_MAX_STRING_LEN] = 0;
 
-    sort_set_slot(index, string_index, target_index_slot);
+    sort_set_slot(index, string_index, first_index_slot + offset);
 }
 
-#define SORT_BATCH_SIZE 7
+#define SORT_BATCH_SIZE 32
 
 void sort_build_index(sort_index_t    *index,
                       int              num_entries,
@@ -172,8 +162,7 @@ void sort_build_index(sort_index_t    *index,
 
     sort_initialize(index);
 
-    for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page)
-    {
+    for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page) {
         for (int i = 0; i < num_entries; ++i) {
             if (sort_validate_value(index, i)) {
                 continue;
