@@ -15,8 +15,10 @@ typedef struct {
     uint8_t *values;
 } sort_index_t;
 
-typedef struct {
-    bool (*get_string)(char *buffer, int len, uint8_t index);
+typedef struct sort_accessor_struct {
+    void *data;
+    bool (*get_string)(struct sort_accessor_struct *self,
+                       char *buffer, int len, uint8_t index);
 } sort_accessor_t;
 
 void sort_clear_slot(sort_index_t *index, uint8_t slot);

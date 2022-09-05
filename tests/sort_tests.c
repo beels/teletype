@@ -346,6 +346,16 @@ TEST sort_insert_string_test_3() {
     PASS();
 }
 
+struct data_type {
+    int   index;
+    char *string;
+};
+
+typedef struct {
+    int               num_entries;
+    struct data_type *entries;
+} data_type_profile_t;
+
 TEST sort_insert_string_test_4() {
     uint8_t ibuff[SORT_BUFFER_LEN];
     uint8_t vbuff[SORT_BUFFER_LEN];
@@ -358,11 +368,6 @@ TEST sort_insert_string_test_4() {
     for (int i = 0; i < BATCH_SIZE; ++i) {
         work_buffer[i][0] = 0;
     }
-
-    struct data_type {
-        int   index;
-        char *string;
-    };
 
     struct data_type input[] = {
         {  0, "eeeeeeee" },
@@ -445,11 +450,6 @@ TEST sort_insert_string_test_5() {
         work_buffer[i][0] = 0;
     }
 
-    struct data_type {
-        int   index;
-        char *string;
-    };
-
     struct data_type input[] = {
         {  215, "good-bye" },
         {   11, "oy" },
@@ -511,7 +511,256 @@ TEST sort_insert_string_test_5() {
     PASS();
 }
 
-TEST sort_build_index_test() {
+TEST sort_insert_string_test_6() {
+    uint8_t ibuff[SORT_BUFFER_LEN];
+    uint8_t vbuff[SORT_BUFFER_LEN];
+    sort_index_t index = { .index = ibuff, .values = vbuff };
+
+    sort_initialize(&index);
+
+    char work_buffer[BATCH_SIZE][SORT_STRING_BUFFER_SIZE];
+
+    for (int i = 0; i < BATCH_SIZE; ++i) {
+        work_buffer[i][0] = 0;
+    }
+
+    struct data_type input[] = {
+        {  0, "eeeeeeee" },
+        {  1, "ffffffff" },
+        {  2, "dddddddd" },
+        {  3, "cccccccc" },
+        {  4, "hhhhhhhh" },
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  7, "gggggggg" },
+    };
+
+    for (int i = 0; i < sizeof(input) / sizeof(*input); ++i) {
+        sort_insert_string(work_buffer,
+                           BATCH_SIZE,
+                           &index,
+                           2,
+                           5,
+                           input[i].index,
+                           input[i].string);
+    }
+
+    struct data_type result[] = {
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  3, "cccccccc" },
+        {  2, "dddddddd" },
+        {  0, "eeeeeeee" },
+    };
+
+#if 0
+    for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
+        printf("%d: %d -> %d: %s\n", i,
+                                     index.index[index.values[i]],
+                                     index.values[i],
+                                     work_buffer[i]);
+    }
+
+    for (int i = sizeof(result) / sizeof(*result); i < 12; ++i) {
+        printf("%d: %d -> %d: (%d)\n", i,
+                                     index.index[index.values[i]],
+                                     index.values[i],
+                                     strlen(work_buffer[i]));
+    }
+#endif
+
+    for (int i = 0; i < sizeof(result) / sizeof(*result); ++i) {
+        char item[4];
+        itoa(i, item, 10);
+
+        ASSERT_STR_EQm(work_buffer[i], result[i].string, work_buffer[i]);
+        ASSERT_EQm(item, result[i].index, index.values[2 * BATCH_SIZE + i]);
+        ASSERT_EQm(item, 2 * BATCH_SIZE + i, index.index[result[i].index]);
+        ASSERT_EQm(item, true, sort_validate_slot(&index, 2 * BATCH_SIZE + i));
+    }
+
+    for (int i = sizeof(result) / sizeof(*result); i < BATCH_SIZE; ++i) {
+        ASSERT_STR_EQ("", work_buffer[i]);
+    }
+
+    for (int i = sizeof(result) / sizeof(*result);
+         2 * BATCH_SIZE + i < 256;
+         ++i)
+    {
+        char item[4];
+        itoa(i, item, 10);
+        ASSERT_EQm(item,
+                   false, sort_validate_slot(&index, 2 * BATCH_SIZE + i));
+    }
+
+    PASS();
+}
+
+bool get_string_from_data_type(sort_accessor_t *self,
+                               char *buffer, int len, uint8_t index)
+{
+    data_type_profile_t *input_profile = (data_type_profile_t *) self->data;
+
+    if (input_profile->num_entries <= index) {
+        return false;
+    }
+
+    strncpy(buffer, input_profile->entries[index].string, len);
+
+    return true;
+}
+
+TEST sort_build_index_test_0() {
+    uint8_t ibuff[SORT_BUFFER_LEN];
+    uint8_t vbuff[SORT_BUFFER_LEN];
+    sort_index_t index = { .index = ibuff, .values = vbuff };
+
+    sort_initialize(&index);
+
+    struct data_type input[] = {
+        {  0, "eeeeeeee" },
+        {  1, "ffffffff" },
+        {  2, "dddddddd" },
+        {  3, "iiiiiiii" },
+        {  4, "gggggggg" },
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  7, "hhhhhhhh" },
+        {  8, "cccccccc" },
+    };
+
+    int n = sizeof(input) / sizeof(*input);
+
+    data_type_profile_t profile = {
+                            .num_entries = n,
+                            .entries = input
+                        };
+
+    sort_accessor_t accessor = { .data = (void *) &profile,
+                                 .get_string = get_string_from_data_type };
+
+    sort_build_index(&index, n, &accessor);
+
+    struct data_type result[] = {
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  8, "cccccccc" },
+        {  2, "dddddddd" },
+        {  0, "eeeeeeee" },
+        {  1, "ffffffff" },
+        {  4, "gggggggg" },
+        {  7, "hhhhhhhh" },
+        {  3, "iiiiiiii" },
+    };
+
+#if 1
+    for (int i = 0; i < n; ++i) {
+        printf("%d: %d -> %d: %s\n", i,
+                                     index.index[index.values[i]],
+                                     index.values[i],
+                                     "" /* work_buffer[i] */);
+    }
+
+    for (int i = n; i < 12; ++i) {
+        printf("%d: %d -> %d\n", i,
+                                 index.index[index.values[i]],
+                                 index.values[i]);
+    }
+#endif
+
+    for (int i = 0; i < n; ++i) {
+        char item[4];
+        itoa(i, item, 10);
+
+        ASSERT_EQm(item, result[i].index, index.values[i]);
+        ASSERT_EQm(item, i, index.index[result[i].index]);
+        ASSERT_EQm(item, true, sort_validate_slot(&index, i));
+    }
+
+    for (int i = n; i < 256; ++i)
+    {
+        char item[4];
+        itoa(i, item, 10);
+        ASSERT_EQm(item, false, sort_validate_slot(&index, i));
+    }
+
+    PASS();
+}
+
+TEST sort_build_index_test_1() {
+    uint8_t ibuff[SORT_BUFFER_LEN];
+    uint8_t vbuff[SORT_BUFFER_LEN];
+    sort_index_t index = { .index = ibuff, .values = vbuff };
+
+    sort_initialize(&index);
+
+    struct data_type input[] = {
+        {  0, "eeeeeeee" },
+        {  1, "ffffffff" },
+        {  2, "dddddddd" },
+        {  3, "iiiiiiii" },
+        {  4, "gggggggg" },
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  7, "cccccccc" },
+        {  8, "hhhhhhhh" },
+    };
+
+    int n = sizeof(input) / sizeof(*input);
+
+    data_type_profile_t profile = {
+                            .num_entries = n,
+                            .entries = input
+                        };
+
+    sort_accessor_t accessor = { .data = (void *) &profile,
+                                 .get_string = get_string_from_data_type };
+
+    sort_build_index(&index, n, &accessor);
+
+    struct data_type result[] = {
+        {  5, "aaaaaaaa" },
+        {  6, "bbbbbbbb" },
+        {  7, "cccccccc" },
+        {  2, "dddddddd" },
+        {  0, "eeeeeeee" },
+        {  1, "ffffffff" },
+        {  4, "gggggggg" },
+        {  8, "hhhhhhhh" },
+        {  3, "iiiiiiii" },
+    };
+
+#if 1
+    for (int i = 0; i < n; ++i) {
+        printf("%d: %d -> %d: %s\n", i,
+                                     index.index[index.values[i]],
+                                     index.values[i],
+                                     "" /* work_buffer[i] */);
+    }
+
+    for (int i = n; i < 12; ++i) {
+        printf("%d: %d -> %d\n", i,
+                                 index.index[index.values[i]],
+                                 index.values[i]);
+    }
+#endif
+
+    for (int i = 0; i < n; ++i) {
+        char item[4];
+        itoa(i, item, 10);
+
+        ASSERT_EQm(item, result[i].index, index.values[i]);
+        ASSERT_EQm(item, i, index.index[result[i].index]);
+        ASSERT_EQm(item, true, sort_validate_slot(&index, i));
+    }
+
+    for (int i = n; i < 256; ++i)
+    {
+        char item[4];
+        itoa(i, item, 10);
+        ASSERT_EQm(item, false, sort_validate_slot(&index, i));
+    }
+
     PASS();
 }
 
@@ -524,5 +773,7 @@ SUITE(sort_suite) {
     RUN_TEST(sort_insert_string_test_3);
     RUN_TEST(sort_insert_string_test_4);
     RUN_TEST(sort_insert_string_test_5);
-    RUN_TEST(sort_build_index_test);
+    RUN_TEST(sort_insert_string_test_6);
+    RUN_TEST(sort_build_index_test_0);
+    RUN_TEST(sort_build_index_test_1);
 }

@@ -27,7 +27,7 @@ void sort_initialize(sort_index_t *index)
     }
 }
 
-#define BATCH_SIZE 7
+#define SORT_BATCH_SIZE 7
 
 void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
                         int           buffer_len,
@@ -94,25 +94,40 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
     sort_set_slot(index, string_index, target_index_slot);
 }
 
+
+            // ARB:
+            // num_entries is the total number of inputs (i.e., files in the
+            // directory).
+
 void sort_build_index(sort_index_t    *index,
                       int              num_entries,
                       sort_accessor_t *accessor)
 {
-    char work_buffer[BATCH_SIZE][SORT_STRING_BUFFER_SIZE];
+    char work_buffer[SORT_BATCH_SIZE][SORT_STRING_BUFFER_SIZE];
 
     sort_initialize(index);
 
-    for (int page = 0; page < num_entries; page += BATCH_SIZE) {
+    for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page)
+    {
         for (int i = 0; i < num_entries; ++i) {
+            if (sort_validate_slot(index, index->index[i])) {
+                continue;
+            }
+
             char temp[SORT_STRING_BUFFER_SIZE];
-            accessor->get_string(temp, SORT_STRING_BUFFER_SIZE, i);
-            sort_insert_string(work_buffer,
-                               BATCH_SIZE,
-                               index,
-                               page,
-                               num_entries,
-                               i,
-                               temp);
+            if (accessor->get_string(accessor,
+                                     temp,
+                                     SORT_STRING_BUFFER_SIZE,
+                                     i))
+            {
+                sort_insert_string(work_buffer,
+                                   SORT_BATCH_SIZE,
+                                   index,
+                                   page,
+                                   num_entries,
+                                   i,
+                                   temp);
+            }
         }
     }
 }
