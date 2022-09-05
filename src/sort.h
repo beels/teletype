@@ -27,6 +27,8 @@ void sort_set_slot(sort_index_t *index, uint8_t value, uint8_t slot);
 
 bool sort_validate_slot(sort_index_t *index, uint8_t slot);
 
+bool sort_validate_value(sort_index_t *index, uint8_t value);
+
 void sort_initialize(sort_index_t *index);
 
 void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],

@@ -20,6 +20,11 @@ bool sort_validate_slot(sort_index_t *index, uint8_t slot)
     return index->index[index->values[slot]] == slot;
 }
 
+bool sort_validate_value(sort_index_t *index, uint8_t value)
+{
+    return index->values[index->index[value]] == value;
+}
+
 void sort_initialize(sort_index_t *index)
 {
     for (int i = 0; i < SORT_BUFFER_LEN; ++i) {
@@ -109,8 +114,22 @@ void sort_build_index(sort_index_t    *index,
 
     for (int page = 0; page * SORT_BATCH_SIZE < num_entries; ++page)
     {
+printf("page %d\n", page);
+            // ARB:
+            // This isn't really necessary, since the slot validation will keep
+            // us from looking at unwritten buffer entries.
+
+        for (int i = 0; i < SORT_BATCH_SIZE; ++i) {
+            work_buffer[i][0] = 0;
+        }
+
         for (int i = 0; i < num_entries; ++i) {
-            if (sort_validate_slot(index, index->index[i])) {
+            if (sort_validate_value(index, i)) {
+#if 0
+                printf("skipping %d: %d -> %d\n", i,
+                                     index->index[i],
+                                     index->values[index->index[i]]);
+#endif
                 continue;
             }
 
