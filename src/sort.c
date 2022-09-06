@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <strings.h>
+
 void sort_clear_slot(sort_index_t *index, uint8_t slot)
 {
     if (!sort_validate_slot(index, slot)) {
@@ -108,7 +110,7 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
 
     while (   offset < buffer_len
            && sort_validate_slot(index, first_index_slot + offset)
-           && 0 < strncmp(string, buffer[offset], SORT_STRING_BUFFER_SIZE))
+           && 0 < strncasecmp(string, buffer[offset], SORT_STRING_BUFFER_SIZE))
     {
         ++offset;
     }
