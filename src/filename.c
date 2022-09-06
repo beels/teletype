@@ -31,3 +31,35 @@ bool filename_find_wildcard_range(int *wildcard_start, char *filename)
     return false;
 }
 
+void filename_ellipsis(char *filename, int maxchars) {
+    // If maxchars is less than 6, we segfault.  Actual use cases will always
+    // be at least 20.
+
+    // split filename into name + extension
+    int length = strlen(filename);
+    if (length <= maxchars) {
+        return;
+    }
+
+    int i = length;
+    while ('.' != filename[i]  && 0 < i) {
+        --i;
+    }
+
+    if ('.' != filename[i]) {
+        i = length;
+    }
+
+    // trim `length - (maxchars + 3)` characters
+    int j = maxchars - (length - i) - 2;
+    while (j < i - (length - maxchars)) {
+        filename[j] = '.';
+        ++j;
+    }
+    while (j < maxchars) {
+        filename[j] = filename[j + (length - maxchars)];
+        ++j;
+    }
+    filename[maxchars] = 0;
+}
+
