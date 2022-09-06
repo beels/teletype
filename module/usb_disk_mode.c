@@ -206,18 +206,20 @@ void tele_usb_exec() {
 }
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
-    for (int i = 0; i < SCENE_TEXT_LINES; ++i) {
-        const char *text = flash_scene_text(preset, i);
+    // Parse selected preset title
+    char preset_title[40];
+    strcpy(preset_title, flash_scene_text(preset, 0));
 
-        if (0 == strncmp(text, ":FNAME:", 7)) {
-            strncpy(buffer, text + 7, FNAME_BUFFER_LEN);
-            for (int j = 0; j < strlen(buffer); ++j) {
-                buffer[j] = tolower((int) buffer[j]);
-            }
-            return true;
-        }
+    if (0 == preset_title[0]) {
+        return false;
     }
-    return false;
+
+    strncat(preset_title, ".*", 40);
+    for (int j = 0; j < strlen(preset_title); ++j) {
+        buffer[j] = tolower((int) preset_title[j]);
+    }
+    buffer[strlen(preset_title)] = 0;
+    return true;
 }
 
 bool tele_usb_disk_iterate_filename(char *output, char *pattern) {
@@ -256,18 +258,20 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
                                       line_no, marker);
         } break;
         case kReadFile: { // Menu line 0: Read from file 'abcd.123'
-            char text_buffer[40];
+            char text_buffer[FNAME_BUFFER_LEN + 6];
             strcpy(text_buffer, "Read '");
             strcat(text_buffer, filename_buffer);
+            filename_ellipsis(text_buffer + 6, 22);
             strcat(text_buffer, "'");
 
             tele_usb_disk_render_line(text_buffer, line_no, marker);
         } break;
 
         case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
-            char text_buffer[40];
+            char text_buffer[FNAME_BUFFER_LEN + 7];
             strcpy(text_buffer, "Write '");
             strcat(text_buffer, filename_buffer);
+            filename_ellipsis(text_buffer + 7, 21);
             strcat(text_buffer, "'");
 
             tele_usb_disk_render_line(text_buffer, line_no, marker);
@@ -275,9 +279,10 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
 
         case kWriteNextInSeries: { // Menu line 2: filename iterator
             if (nextname_buffer[0]) {
-                char text_buffer[40];
+                char text_buffer[FNAME_BUFFER_LEN + 6];
                 strcpy(text_buffer, "Write '");
                 strcat(text_buffer, nextname_buffer);
+                filename_ellipsis(text_buffer + 7, 21);
                 strcat(text_buffer, "'");
 
                 tele_usb_disk_render_line(text_buffer, line_no, marker);
@@ -341,9 +346,18 @@ static void tele_usb_discover_filenames(void) {
                 ; // Do nothing
             }
 
-            strncpy(filename_buffer, nextname_buffer, sizeof(filename_buffer));
+            if (nextname_buffer[0]) {
+                // We found at least one matching file.
+                strncpy(filename_buffer,
+                        nextname_buffer,
+                        sizeof(filename_buffer));
 
-            filename_increment_version(nextname_buffer, wc_start);
+                filename_increment_version(nextname_buffer, wc_start);
+            }
+            else {
+                // We supply a default filename based on the title.
+                strcpy(filename_buffer + wc_start, "001");
+            }
 
             nav_filelist_reset();
         }
@@ -469,6 +483,11 @@ void tele_usb_disk_write_file(char *filename, int preset) {
     file_close();
 }
 
+
+            // ARB:
+            // Should return bool so that we can report success/failure on
+            // screen to the user.
+
 void tele_usb_disk_read_file(char *filename, int preset) {
     scene_state_t scene;
     ss_init(&scene);
@@ -479,7 +498,7 @@ void tele_usb_disk_read_file(char *filename, int preset) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
         if (!file_open(FOPEN_MODE_R)) {
-            char text_buffer[40];
+            char text_buffer[FNAME_BUFFER_LEN + 7];
             strcpy(text_buffer, "fail: ");
             strcat(text_buffer, filename);
 
@@ -502,7 +521,7 @@ void tele_usb_disk_read_file(char *filename, int preset) {
         }
     }
     else {
-        char text_buffer[40];
+        char text_buffer[FNAME_BUFFER_LEN + 10];
         strcpy(text_buffer, "no file: ");
         strcat(text_buffer, filename);
 
@@ -584,7 +603,6 @@ static void disk_browse_read_sorted_filename(
 static sort_index_t s_file_index;
 static int disk_browse_num_files;
 static bool disk_browse_force_render;
-// static int disk_browse_num_pages;
 
 static void disk_browse_short_press(void) {
 }
@@ -662,6 +680,7 @@ static void disk_browse_PollADC(int32_t data) {
                                                  filename,
                                                  FNAME_BUFFER_LEN,
                                                  first_entry + i);
+                filename_ellipsis(filename, 28);
                 tele_usb_disk_render_line(filename,
                                           i + 1,
                                           (i == current_entry) ? kCurrent
@@ -720,9 +739,6 @@ static void tele_usb_disk_browse_init(char *filename,
 
     nav_filelist_single_enable(FS_FILE);
     disk_browse_num_files = nav_filelist_nb(FS_FILE);
-    // disk_browse_num_pages =
-    //     disk_browse_num_files / DISK_BROWSE_PAGE_SIZE
-    //     + (0 < disk_browse_num_files % DISK_BROWSE_PAGE_SIZE);
 
     // render browser
     char text_buffer[40];
