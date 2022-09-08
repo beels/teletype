@@ -12,66 +12,64 @@
 // tele_usb_disk_handler_KeyTimer, tele_usb_disk now supports menu-driven
 // reading and writing of Teletype scenes.
 //
-// The menu consists of five entries:
+// The menu consists of a title display and five entries:
 //
-// 1. Read from file 'abcde007.txt'
-// 2. Write to file 'abcde007.txt'
-// 3. Write to file 'abcde008.txt' (conditional)
-// 4. Legacy WRITE/READ operation
-// 5. Exit USB disk mode           (default)
+// 17 MY SCENE TITLE
+//   Read 'MY SCENE TITLE.007'
+//   Write ''MY SCENE TITLE.007'
+//   Write ''MY SCENE TITLE.008'         (conditional)
+//   Browse USB disk
+// > Exit USB disk mode                   (default)
 //
-// When the menu is first displayed, the fifth entry is selected, and a short
-// press on the Teletype panel button will advance to the next entry, wrapping
-// around to the beginning as needed.  A long press on the panel button will
-// execute the selected menu entry and then exit USB disk mode.
+// When the menu is first displayed, the "exit" entry is selected, and a short
+// press on the Teletype panel button will advance to the next entry ("read"),
+// wrapping around to the beginning as needed.  A long press on the panel
+// button will execute the selected menu entry and then exit USB disk mode.
 //
 // The "Exit USB disk mode" entry exits USB disk mode without taking any other
-// action.
-//
-// The "Legacy WRITE/READ operation" entry writes all scenes to
-// 'tt[0-3][0-9]s.txt' and then reads all scenes from 'tt[0-3][0-9].txt', just
-// like as Teletype USB disk mode has always done.
+// action.  Because it is the most conservative option, it is the default entry
+// selected when you enter USB disk mode.
 //
 // The other three entries read or write the currently-selected scene from or
-// to the named file listed in the menu entry.  Note that the
-// "currently-selected scene" is *not* the currently-running Teletype scene.
-// It is the sceen that is displayed if you hit the ESC key on the keyboard.
-// Often this is also the currently-running Teletype scene, but they can
-// diverge.  The scene number and title of the currently-selected scene is
-// displayed at the top of the menu for clarity.
+// to the file listed in the menu entry.  These entries operate on the content
+// of flash memory, not on the currently-running scene.  Therefore, the
+// currently-runing scene will not immediately change when a file is read.  The
+// scene must be re-loaded (if desired) from flash after you exit USB disk
+// mode.  Note that the "currently-selected scene" is the most-recently-loaded
+// Teletype scene in flash memory, which corresponds to the starting point for
+// whatever scripts are currently running on the Teletype.  This is not
+// necessarily the same scene number and title that is displayed when you hit
+// the ESC key.
 //
-// The file name listed in the menu entry is chosen as follows:
+// The file name listed in the menu entry is the title of the selected scene,
+// with a numeric file extension added.  The menu gives the option of reading
+// and writing from the existing file on the USB disk that has the highest
+// matching numeric extension, or writing to a new file on the USB disk with
+// the next available numeric extension.  In the sample menu above, there is a
+// file on the disk named "MY SCENE TITLE.007", but no file with a
+// higher-numbered extension.  The numeric extension allows the user to easily
+// save successive versions of a scene while it is being developed.
 //
-// - By default, the filename is the traditional 'tt[0-3[0-9].txt' name
-//   associated with the currently-selected scene.  I.e., if scene 17 is
-//   currently selected, the first menu entry will say "Read from file
-//   'tt17.txt'".
+// The "browse" entry takes the user to a scrolling list of files on the USB
+// disk, from which they can select an alternate file to read or write:
 //
-// - If the description of the currently-selected scene contains a line
-//   beginning with the token ":FNAME:" then the filename will be the text that
-//   follows that token.  I.e., if the description contains a line that reads
-//   ":FNAME:MYSCENE.TXT", then the first menu entry will say "Read from file
-//   'myscene.txt'".
+// MY LITTLE SCENE
+//   A SEQUENCER.001
+//   A SEQUENCER.002
+//   CHORD PROGRESSION.001
+// > CHORD PROGRESSION.002
+//   CHORD PROGRESSION.003
+//   MY LITTLE SCENE.001
+//   MY LITTLE SCENE.002
 //
-// - If the filename designated with the ":FNAME:" token contains an asterisk,
-//   then the firmware will search through all files in the root of the USB
-//   disk that start with the text before the asterisk and will choose the file
-//   that comes last in alphanumeric order.  This name will be displayed in the
-//   first and second menu entries.  In addition, the firmware will attempt to
-//   read the part of the filename that starts at the asterisk as an integer,
-//   and increment the integer by 1.  The result will be displayed in the third
-//   menu entry.  I.e., if the disk contains the files 'abcde006.txt' and
-//   'abcde007.txt' and the scene description contains the text
-//   ":FNAME:ABCDE*.TXT" then the menu will appear as listed at the top of this
-//   note.  This feature gives the user the ability to save a given scene
-//   repeatedly and always have the option to (a) revert to the most recently
-//   saved version, (b) update the most recently saved version, or (c) save to
-//   a new file, which now becomes the most recently saved version, and
-//   preserve the existing saved versions as an archive.
+// The file list can be navigated using the PARAM knob, and the file currently
+// marked with a ">" on the left can be selected by a long press on the front
+// button.  When a file is selected the user is returned to the main menu,
+// where they can read/write the selected file.
 //
-//   Note that the asterisk can appear anywhere in the file name, so names such
-//   as 'abc.001' can be used if your operating system editor does not rely on
-//   the '*.txt' extension to operate correctly.
+// Anywhere in the USB disk mode, when the user presses the front button for
+// long enough to be considered a "long" press, the ">" marker changes to a
+// "*".
 
 void tele_usb_disk(void);
 void tele_usb_disk_handler_Front(int32_t);
