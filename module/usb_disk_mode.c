@@ -207,14 +207,19 @@ void tele_usb_exec() {
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
     // Parse selected preset title
-    char preset_title[40];
+    char preset_title[44];
     strcpy(preset_title, flash_scene_text(preset, 0));
 
     if (0 == preset_title[0]) {
         return false;
     }
 
-    strncat(preset_title, ".*", 40);
+
+            // ARB:
+            // The ".txt" part might be ignored by the filesystem library,
+            // since it follows the asterisk.
+
+    strncat(preset_title, "-*.txt", 44);
     for (int j = 0; j < strlen(preset_title); ++j) {
         buffer[j] = tolower((int) preset_title[j]);
     }
@@ -356,7 +361,7 @@ static void tele_usb_discover_filenames(void) {
             }
             else {
                 // We supply a default filename based on the title.
-                strcpy(filename_buffer + wc_start, "001");
+                strcpy(filename_buffer + wc_start, "001.txt");
             }
 
             nav_filelist_reset();
@@ -574,6 +579,9 @@ static int read_scaled_param(int last_value, uint8_t scale) {
 
 static bool disk_browse_read_filename(sort_accessor_t *dummy,
                                       char *filename, int len, uint8_t index) {
+    // The 'sort_accessor_t' argument is used in test doubles of this function
+    // to provide information about the dummy "filesystem".
+
     if (nav_filelist_goto(index)
         && nav_filelist_validpos()
         && nav_file_getname(filename, len))
@@ -614,7 +622,7 @@ static void disk_browse_button_timeout(void) {
     // ARB:
     // All of these `char x[40]` buffers need to be re-evaluated.
 
-    char filename[40];
+    char filename[44];
     disk_browse_read_sorted_filename(
             &s_file_index, filename, FNAME_BUFFER_LEN, index);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);

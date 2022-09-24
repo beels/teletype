@@ -6,6 +6,6 @@ bool filename_find_wildcard_range(int *wildcard_start, char *filename);
 void filename_increment_version(char *filename, int wildcard_start);
 void filename_ellipsis(char *filename, int maxchars);
 
-#define FNAME_BUFFER_LEN 37
+#define FNAME_BUFFER_LEN 41
 
 #endif

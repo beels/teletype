@@ -32,33 +32,39 @@ bool filename_find_wildcard_range(int *wildcard_start, char *filename)
 }
 
 void filename_ellipsis(char *filename, int maxchars) {
+    // Re-write 'filename', trimming the file extension off the end and
+    // rendering the remainder as 'a...xxx' where 'xxx' are the last three
+    // characters of the non-extension part and 'a' is as much of the initial
+    // substring as will fit if the total length of the result is 'maxchars'.
+    // If the entire non-extension part will fit in 'maxchars', no ellipsis is
+    // added.
+    //
     // If maxchars is less than 6, we segfault.  Actual use cases will always
     // be at least 20.
 
-    // split filename into name + extension
     int length = strlen(filename);
-    if (length <= maxchars) {
-        return;
-    }
 
     int i = length;
     while ('.' != filename[i]  && 0 < i) {
         --i;
     }
 
-    if ('.' != filename[i]) {
-        i = length;
+    if ('.' == filename[i]) {
+        filename[i] = 0;
+        length = i;
     }
 
-    // trim `length - (maxchars + 3)` characters
-    int j = maxchars - (length - i) - 2;
-    while (j < i - (length - maxchars)) {
-        filename[j] = '.';
-        ++j;
+    if (length <= maxchars) {
+        return;
     }
-    while (j < maxchars) {
-        filename[j] = filename[j + (length - maxchars)];
-        ++j;
+
+    int tail = length - 3;
+    int ellipsis = maxchars - 5;
+    for (int i = 0; i < 2; ++i) {
+        filename[ellipsis + i] = '.';
+    }
+    for (int i = 0; i < 3; ++i) {
+        filename[maxchars - 3 + i] = filename[tail + i];
     }
     filename[maxchars] = 0;
 }
