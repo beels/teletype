@@ -77,6 +77,57 @@ bool tele_usb_eof(void* self_data) {
     return file_eof() != 0;
 }
 
+static int read_scaled_param(uint8_t resolution, uint8_t scale) {
+    // The knob has a 12 bit range, and has a fair amount of jitter in the low
+    // bits.  Division into more than 64 zones becomes increasingly unstable.
+    //
+    // Intentional knob movement is detected by
+    // adc[1] >> 8 != last_knob >> 8
+    //
+    // Knob turns seem to be considered volatile, so to ensure that there is no
+    // jitter in the output for selection-style values, it can be desireable to
+    // have every other value in a selection-style param be a dead zone.
+    //
+    // ```
+    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
+    // uint8_t deadzone = value & 1;
+    // value >>= 1;
+    // if (deadzone || abs(value - last_value) < 2) {
+    //     return;
+    // }
+    // last_value = value;
+    // // now do stuff
+    // ```
+
+    static uint16_t last_knob = 0;
+
+    uint16_t adc[4];
+
+    adc_convert(&adc);
+
+    uint16_t value = adc[1] >> (12 - (1 + resolution));
+
+    uint16_t deadzone = value & 1;
+    value >>= 1;
+
+    if (deadzone || abs(value - last_knob) < 2) {
+        value = last_knob;
+    }
+    else {
+        last_knob = value;
+    }
+
+    // Now scale the value, which right now is at knob resolution.
+
+    value = value / ((1 << resolution) / scale);
+
+    if (scale - 1 < value) {
+        value = scale - 1;
+    }
+
+    return value;
+}
+
 static int button_counter = 0;
 static bool long_press = false;
 static int menu_selection = 4;
@@ -87,6 +138,8 @@ static int menu_selection = 4;
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
+#define MAIN_MENU_PAGE_SIZE 5
+
 enum { kBlank = 0, kCurrent, kSelected };
 enum {
     kHelpText = -1,
@@ -96,6 +149,29 @@ enum {
     kBrowse,
     kExit
 };
+
+static
+void no_op_short_press(void) {
+}
+
+static void main_menu_PollADC(int32_t data) {
+    int index = read_scaled_param(10, MAIN_MENU_PAGE_SIZE);
+
+    if (index != menu_selection) {
+        if (index == kWriteNextInSeries && !nextname_buffer[0]) {
+            return;
+        }
+
+        // Update selected items
+        tele_usb_disk_render_menu_line(menu_selection, menu_selection + 1,
+                                       kBlank);
+
+        tele_usb_disk_render_menu_line(index, index + 1,
+                                       kCurrent);
+
+        menu_selection = index;
+    }
+}
 
 static
 void main_menu_short_press() {
@@ -373,9 +449,10 @@ static void tele_usb_discover_filenames(void) {
 
 void tele_usb_disk_init() {
     // initial button handlers (main menu)
-    short_press_action = &main_menu_short_press;
+    short_press_action = &no_op_short_press;
     button_timeout_action = &main_menu_button_timeout;
     long_press_action = &main_menu_long_press;
+    app_event_handlers[kEventPollADC] = &main_menu_PollADC;
 
     button_counter = 0;
     long_press = false;
@@ -536,47 +613,6 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     }
 }
 
-static int read_scaled_param(int last_value, uint8_t scale) {
-    // The knob has a 12 bit range, and has a fair amount of jitter in the low
-    // bits.  Division into more than 64 zones becomes increasingly unstable.
-    //
-    // Intentional knob movement is detected by
-    // adc[1] >> 8 != last_knob >> 8
-    //
-    // Knob turns seem to be considered volatile, so to ensure that there is no
-    // jitter in the output for selection-style values, it can be desireable to
-    // have every other value in a selection-style param be a dead zone.
-    //
-    // ```
-    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
-    // uint8_t deadzone = value & 1;
-    // value >>= 1;
-    // if (deadzone || abs(value - last_value) < 2) {
-    //     return;
-    // }
-    // last_value = value;
-    // // now do stuff
-    // ```
-
-    uint16_t adc[4];
-
-    adc_convert(&adc);
-
-    uint8_t value = adc[1] / (2048 / scale);
-
-    uint8_t deadzone = value & 1;
-    value >>= 1;
-    if (scale - 1 < value) {
-        value = scale - 1;
-    }
-
-    if (!deadzone || 1 < abs(value - last_value)) {
-        last_value = value;
-    }
-
-    return value;
-}
-
 static bool disk_browse_read_filename(sort_accessor_t *dummy,
                                       char *filename, int len, uint8_t index) {
     // The 'sort_accessor_t' argument is used in test doubles of this function
@@ -612,11 +648,8 @@ static sort_index_t s_file_index;
 static int disk_browse_num_files;
 static bool disk_browse_force_render;
 
-static void disk_browse_short_press(void) {
-}
-
 static void disk_browse_button_timeout(void) {
-    int index = read_scaled_param(0, disk_browse_num_files);
+    int index = read_scaled_param(10, disk_browse_num_files);
     int selected_entry = index % DISK_BROWSE_PAGE_SIZE;
 
     // ARB:
@@ -625,6 +658,7 @@ static void disk_browse_button_timeout(void) {
     char filename[44];
     disk_browse_read_sorted_filename(
             &s_file_index, filename, FNAME_BUFFER_LEN, index);
+    filename_ellipsis(filename, 28);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);
 }
 
@@ -644,7 +678,7 @@ static void disk_browse_finish(void) {
 }
 
 static void disk_browse_long_press(void) {
-    int item = read_scaled_param(0, disk_browse_num_files);
+    int item = read_scaled_param(10, disk_browse_num_files);
 
     // The save/load filename is the one selected.
 
@@ -660,7 +694,8 @@ static void disk_browse_long_press(void) {
 
 static void disk_browse_PollADC(int32_t data) {
     static int last_index = -10 * DISK_BROWSE_PAGE_SIZE;
-    int        index = read_scaled_param(last_index, disk_browse_num_files);
+
+    int index = read_scaled_param(10, disk_browse_num_files);
 
     if (disk_browse_force_render) {
         last_index = -10 * DISK_BROWSE_PAGE_SIZE;
@@ -731,7 +766,7 @@ static void tele_usb_disk_browse_init(char *filename,
                                       int preset)
 {
     // Set event handlers
-    short_press_action = &disk_browse_short_press;
+    short_press_action = &no_op_short_press;
     button_timeout_action = &disk_browse_button_timeout;
     long_press_action = &disk_browse_long_press;
     app_event_handlers[kEventPollADC] = &disk_browse_PollADC;
