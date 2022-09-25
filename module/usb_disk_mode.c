@@ -335,7 +335,7 @@ void tele_usb_disk_render_line(char *text, int line_no, int marker) {
 void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
     switch (item) {
         case kHelpText: { // Menu line 0: Read from file 'abcd.123'
-            tele_usb_disk_render_line("short press: next; long: exec",
+            tele_usb_disk_render_line("PARAM: select; button: exec",
                                       line_no, marker);
         } break;
         case kReadFile: { // Menu line 0: Read from file 'abcd.123'
@@ -375,7 +375,16 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         } break;
 
         case kExit: { // Menu line 4: Exit USB disk mode
-            tele_usb_disk_render_line("Exit USB disk mode", line_no, marker);
+            char text_buffer[FNAME_BUFFER_LEN + 6];
+
+            uint8_t preset = flash_last_saved_scene();
+            char preset_buffer[3];
+            itoa(preset, preset_buffer, 10);
+
+            strcpy(text_buffer, "Exit to scene ");
+            strcat(text_buffer, preset_buffer);
+
+            tele_usb_disk_render_line(text_buffer, line_no, marker);
         } break;
 
         default: {} break;
@@ -465,23 +474,15 @@ void tele_usb_disk_init() {
 
     // Parse selected preset number
     uint8_t preset = flash_last_saved_scene();
-    char preset_buffer[3];
-    itoa(preset, preset_buffer, 10);
 
     // Parse selected preset title
     char preset_title[40];
     strcpy(preset_title, flash_scene_text(preset, 0));
 
-    // Print selected preset number and title
+    // Print selected preset title
     {
         region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], preset_buffer, 2, 0, 0xa, 0);
-        u8 pos = font_string_position(preset_buffer,
-                                      strlen(preset_buffer));
-        pos += font_string_position(" ", 1);
-        font_string_region_clip(&line[0],
-                                preset_title,
-                                pos + 2, 0, 0xa, 0);
+        font_string_region_clip(&line[0], preset_title, 2, 0, 0xa, 0);
         region_draw(&line[0]);
     }
 
