@@ -153,14 +153,12 @@ enum {
     kExit
 };
 
-static
-void no_op_short_press(void) {
-}
-
 static void main_menu_PollADC(int32_t data) {
+    static int last_index = -10 * MAIN_MENU_PAGE_SIZE;
+
     int index = read_scaled_param(10, MAIN_MENU_PAGE_SIZE);
 
-    if (index != menu_selection) {
+    if (index != last_index) {
         if (index == kWriteNextInSeries && !nextname_buffer[0]) {
             return;
         }
@@ -173,6 +171,7 @@ static void main_menu_PollADC(int32_t data) {
                                        kCurrent);
 
         menu_selection = index;
+        last_index = index;
     }
 }
 
@@ -456,7 +455,7 @@ static void tele_usb_discover_filenames(void) {
 
 void tele_usb_disk_init() {
     // initial button handlers (main menu)
-    short_press_action = &no_op_short_press;
+    short_press_action = &main_menu_short_press;
     button_timeout_action = &main_menu_button_timeout;
     long_press_action = &main_menu_long_press;
     app_event_handlers[kEventPollADC] = &main_menu_PollADC;
@@ -651,12 +650,11 @@ static int disk_browse_num_files;
 static bool disk_browse_force_render;
 
 static void disk_browse_button_timeout(void) {
-    int index = read_scaled_param(10, disk_browse_num_files);
-    int selected_entry = index % DISK_BROWSE_PAGE_SIZE;
+    int selected_entry = menu_selection % DISK_BROWSE_PAGE_SIZE;
 
     char filename[FNAME_BUFFER_LEN];
     disk_browse_read_sorted_filename(
-            &s_file_index, filename, FNAME_BUFFER_LEN, index);
+            &s_file_index, filename, FNAME_BUFFER_LEN, menu_selection);
     filename_ellipsis(filename, filename, 28);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);
 }
@@ -676,13 +674,75 @@ static void disk_browse_finish(void) {
     tele_usb_disk_init();
 }
 
-static void disk_browse_long_press(void) {
-    int item = read_scaled_param(10, disk_browse_num_files);
+static void disk_browse_navigate(int old_index, int new_index) {
+    int page = new_index / DISK_BROWSE_PAGE_SIZE;
+    bool update_page = (page != old_index / DISK_BROWSE_PAGE_SIZE);
 
+    // Render current page
+
+    int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+    int current_entry = new_index - first_entry;
+    int last_entry = old_index - first_entry;
+
+    for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
+        if (disk_browse_num_files <= first_entry + i) {
+            region_fill(&line[i + 1], 0);
+            region_draw(&line[i + 1]);
+        }
+        else if (update_page || i == current_entry || i == last_entry) {
+            char filename[FNAME_BUFFER_LEN];
+            disk_browse_read_sorted_filename(&s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             first_entry + i);
+            filename_ellipsis(filename, filename, 28);
+            tele_usb_disk_render_line(filename,
+                                      i + 1,
+                                      (i == current_entry) ? kCurrent
+                                                           : kBlank);
+
+            if (i == current_entry) {
+                // Display title on line 0
+
+                region_fill(&line[0], 0x2);
+
+                if (file_open(FOPEN_MODE_R)) {
+                    uint8_t title[DISPLAY_BUFFER_LEN];
+                    file_read_buf(title, DISPLAY_MAX_LEN);
+                    title[DISPLAY_MAX_LEN] = 0;
+                    file_close();
+                    for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
+                        if (title[j] == '\n') {
+                            title[j] = 0;
+                            break;
+                        }
+                        else if (title[j] < ' ' || '~' < title[j]) {
+                            title[j] = '.';
+                        }
+                    }
+
+                    font_string_region_clip(
+                            &line[0], (char *) title, 2, 0, 0xa, 0x2);
+                }
+                region_draw(&line[0]);
+            }
+        }
+    }
+}
+
+static void disk_browse_short_press(void) {
+    if (menu_selection < disk_browse_num_files - 1) {
+        disk_browse_navigate(menu_selection, menu_selection + 1);
+    }
+
+    ++menu_selection;
+}
+
+static void disk_browse_long_press(void) {
     // The save/load filename is the one selected.
 
     disk_browse_read_sorted_filename(&s_file_index,
-            filename_buffer, FNAME_BUFFER_LEN, item);
+            filename_buffer, FNAME_BUFFER_LEN, menu_selection);
 
     // We have a concrete file, so no concept of "save next in series".
 
@@ -702,60 +762,9 @@ static void disk_browse_PollADC(int32_t data) {
     }
 
     if (index != last_index) {
-        int page = index / DISK_BROWSE_PAGE_SIZE;
-        bool update_page = (page != last_index / DISK_BROWSE_PAGE_SIZE);
+        disk_browse_navigate(menu_selection, index);
 
-        // Render current page
-
-        int first_entry = page * DISK_BROWSE_PAGE_SIZE;
-        int current_entry = index - first_entry;
-        int last_entry = last_index - first_entry;
-
-        for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
-            if (disk_browse_num_files <= first_entry + i) {
-                region_fill(&line[i + 1], 0);
-                region_draw(&line[i + 1]);
-            }
-            else if (update_page || i == current_entry || i == last_entry) {
-                char filename[FNAME_BUFFER_LEN];
-                disk_browse_read_sorted_filename(&s_file_index,
-                                                 filename,
-                                                 FNAME_BUFFER_LEN,
-                                                 first_entry + i);
-                filename_ellipsis(filename, filename, 28);
-                tele_usb_disk_render_line(filename,
-                                          i + 1,
-                                          (i == current_entry) ? kCurrent
-                                                               : kBlank);
-
-                if (i == current_entry) {
-                    // Display title on line 0
-
-                    region_fill(&line[0], 0x2);
-
-                    if (file_open(FOPEN_MODE_R)) {
-                        uint8_t title[DISPLAY_BUFFER_LEN];
-                        file_read_buf(title, DISPLAY_MAX_LEN);
-                        title[DISPLAY_MAX_LEN] = 0;
-                        file_close();
-                        for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
-                            if (title[j] == '\n') {
-                                title[j] = 0;
-                                break;
-                            }
-                            else if (title[j] < ' ' || '~' < title[j]) {
-                                title[j] = '.';
-                            }
-                        }
-
-                        font_string_region_clip(
-                                &line[0], (char *) title, 2, 0, 0xa, 0x2);
-                    }
-                    region_draw(&line[0]);
-                }
-            }
-        }
-
+        menu_selection = index;
         last_index = index;
     }
 }
@@ -765,7 +774,7 @@ static void tele_usb_disk_browse_init(char *filename,
                                       int preset)
 {
     // Set event handlers
-    short_press_action = &no_op_short_press;
+    short_press_action = &disk_browse_short_press;
     button_timeout_action = &disk_browse_button_timeout;
     long_press_action = &disk_browse_long_press;
     app_event_handlers[kEventPollADC] = &disk_browse_PollADC;
