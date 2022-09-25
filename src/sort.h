@@ -7,7 +7,7 @@
 
 #define SORT_BUFFER_LEN 256
 
-#define SORT_MAX_STRING_LEN 32
+#define SORT_MAX_STRING_LEN 40
 #define SORT_STRING_BUFFER_SIZE (SORT_MAX_STRING_LEN + 1)
 
 typedef struct {

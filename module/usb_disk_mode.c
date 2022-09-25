@@ -138,6 +138,9 @@ static int menu_selection = 4;
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
+#define DISPLAY_MAX_LEN 32
+#define DISPLAY_BUFFER_LEN (DISPLAY_MAX_LEN + 1)
+
 #define MAIN_MENU_PAGE_SIZE 5
 
 enum { kBlank = 0, kCurrent, kSelected };
@@ -282,11 +285,12 @@ void tele_usb_exec() {
 }
 
 bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
-    // Parse selected preset title
-    char preset_title[44];
-    strcpy(preset_title, flash_scene_text(preset, 0));
+    char temp_filename[FNAME_BUFFER_LEN];
 
-    if (0 == preset_title[0]) {
+    // Parse selected preset title
+    strcpy(temp_filename, flash_scene_text(preset, 0));
+
+    if (0 == temp_filename[0]) {
         return false;
     }
 
@@ -295,11 +299,11 @@ bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
             // The ".txt" part might be ignored by the filesystem library,
             // since it follows the asterisk.
 
-    strncat(preset_title, "-*.txt", 44);
-    for (int j = 0; j < strlen(preset_title); ++j) {
-        buffer[j] = tolower((int) preset_title[j]);
+    strncat(temp_filename, "-*.txt", 44);
+    for (int j = 0; j < strlen(temp_filename); ++j) {
+        buffer[j] = tolower((int) temp_filename[j]);
     }
-    buffer[strlen(preset_title)] = 0;
+    buffer[strlen(temp_filename)] = 0;
     return true;
 }
 
@@ -310,7 +314,7 @@ bool tele_usb_disk_iterate_filename(char *output, char *pattern) {
 }
 
 void tele_usb_disk_render_line(char *text, int line_no, int marker) {
-    char text_buffer[40];
+    char text_buffer[DISPLAY_BUFFER_LEN];
     u8 gutter = font_string_position(">", 1) + 2;
 
     region_fill(&line[line_no], 0);
@@ -333,13 +337,14 @@ void tele_usb_disk_render_line(char *text, int line_no, int marker) {
 }
 
 void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
+    char text_buffer[DISPLAY_BUFFER_LEN];
+
     switch (item) {
         case kHelpText: { // Menu line 0: Read from file 'abcd.123'
             tele_usb_disk_render_line("PARAM: select; button: exec",
                                       line_no, marker);
         } break;
         case kReadFile: { // Menu line 0: Read from file 'abcd.123'
-            char text_buffer[FNAME_BUFFER_LEN + 6];
             strcpy(text_buffer, "Read '");
             strcat(text_buffer, filename_buffer);
             filename_ellipsis(text_buffer + 6, 22);
@@ -349,7 +354,6 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         } break;
 
         case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
-            char text_buffer[FNAME_BUFFER_LEN + 7];
             strcpy(text_buffer, "Write '");
             strcat(text_buffer, filename_buffer);
             filename_ellipsis(text_buffer + 7, 21);
@@ -360,7 +364,6 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
 
         case kWriteNextInSeries: { // Menu line 2: filename iterator
             if (nextname_buffer[0]) {
-                char text_buffer[FNAME_BUFFER_LEN + 6];
                 strcpy(text_buffer, "Write '");
                 strcat(text_buffer, nextname_buffer);
                 filename_ellipsis(text_buffer + 7, 21);
@@ -375,8 +378,6 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         } break;
 
         case kExit: { // Menu line 4: Exit USB disk mode
-            char text_buffer[FNAME_BUFFER_LEN + 6];
-
             uint8_t preset = flash_last_saved_scene();
             char preset_buffer[3];
             itoa(preset, preset_buffer, 10);
@@ -475,12 +476,15 @@ void tele_usb_disk_init() {
     // Parse selected preset number
     uint8_t preset = flash_last_saved_scene();
 
-    // Parse selected preset title
-    char preset_title[40];
-    strcpy(preset_title, flash_scene_text(preset, 0));
-
     // Print selected preset title
     {
+        char preset_title[DISPLAY_BUFFER_LEN];
+        strcpy(preset_title, flash_scene_text(preset, 0));
+
+
+            // ARB:
+            // Can we just use flash_scene_text directly here?
+
         region_fill(&line[0], 0);
         font_string_region_clip(&line[0], preset_title, 2, 0, 0xa, 0);
         region_draw(&line[0]);
@@ -581,9 +585,9 @@ void tele_usb_disk_read_file(char *filename, int preset) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
         if (!file_open(FOPEN_MODE_R)) {
-            char text_buffer[FNAME_BUFFER_LEN + 7];
+            char text_buffer[DISPLAY_BUFFER_LEN];
             strcpy(text_buffer, "fail: ");
-            strcat(text_buffer, filename);
+            strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
 
             region_fill(&line[0], 0);
             font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
@@ -604,9 +608,9 @@ void tele_usb_disk_read_file(char *filename, int preset) {
         }
     }
     else {
-        char text_buffer[FNAME_BUFFER_LEN + 10];
+        char text_buffer[DISPLAY_BUFFER_LEN];
         strcpy(text_buffer, "no file: ");
-        strcat(text_buffer, filename);
+        strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 9);
 
         region_fill(&line[0], 0);
         font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
@@ -653,10 +657,7 @@ static void disk_browse_button_timeout(void) {
     int index = read_scaled_param(10, disk_browse_num_files);
     int selected_entry = index % DISK_BROWSE_PAGE_SIZE;
 
-    // ARB:
-    // All of these `char x[40]` buffers need to be re-evaluated.
-
-    char filename[44];
+    char filename[FNAME_BUFFER_LEN];
     disk_browse_read_sorted_filename(
             &s_file_index, filename, FNAME_BUFFER_LEN, index);
     filename_ellipsis(filename, 28);
@@ -736,11 +737,11 @@ static void disk_browse_PollADC(int32_t data) {
                     region_fill(&line[0], 0x2);
 
                     if (file_open(FOPEN_MODE_R)) {
-                        uint8_t title[FNAME_BUFFER_LEN + 1];
-                        file_read_buf(title, FNAME_BUFFER_LEN);
-                        title[FNAME_BUFFER_LEN] = 0;
+                        uint8_t title[DISPLAY_BUFFER_LEN];
+                        file_read_buf(title, DISPLAY_MAX_LEN);
+                        title[DISPLAY_MAX_LEN] = 0;
                         file_close();
-                        for (int j = 0; j < FNAME_BUFFER_LEN; ++j) {
+                        for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
                             if (title[j] == '\n') {
                                 title[j] = 0;
                                 break;
@@ -785,7 +786,7 @@ static void tele_usb_disk_browse_init(char *filename,
     disk_browse_num_files = nav_filelist_nb(FS_FILE);
 
     // render browser
-    char text_buffer[40];
+    char text_buffer[DISPLAY_BUFFER_LEN];
     itoa(disk_browse_num_files, text_buffer, 10);
     strcat(text_buffer, " files total");
     tele_usb_disk_render_line(text_buffer, 0, kBlank);

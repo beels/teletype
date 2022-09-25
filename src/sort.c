@@ -154,6 +154,9 @@ void sort_insert_string(char         (*buffer)[SORT_STRING_BUFFER_SIZE],
     sort_set_slot(index, string_index, first_index_slot + offset);
 }
 
+// This is just a heuristic.  The larger the batch size, the quicker the sort,
+// but the more stack space is required.
+
 #define SORT_BATCH_SIZE 32
 
 void sort_build_index(sort_index_t    *index,
