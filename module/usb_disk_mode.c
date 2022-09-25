@@ -346,8 +346,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         } break;
         case kReadFile: { // Menu line 0: Read from file 'abcd.123'
             strcpy(text_buffer, "Read '");
-            strcat(text_buffer, filename_buffer);
-            filename_ellipsis(text_buffer + 6, 22);
+            filename_ellipsis(text_buffer + 6, filename_buffer, 22);
             strcat(text_buffer, "'");
 
             tele_usb_disk_render_line(text_buffer, line_no, marker);
@@ -355,8 +354,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
 
         case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
             strcpy(text_buffer, "Write '");
-            strcat(text_buffer, filename_buffer);
-            filename_ellipsis(text_buffer + 7, 21);
+            filename_ellipsis(text_buffer + 7, filename_buffer, 21);
             strcat(text_buffer, "'");
 
             tele_usb_disk_render_line(text_buffer, line_no, marker);
@@ -365,8 +363,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         case kWriteNextInSeries: { // Menu line 2: filename iterator
             if (nextname_buffer[0]) {
                 strcpy(text_buffer, "Write '");
-                strcat(text_buffer, nextname_buffer);
-                filename_ellipsis(text_buffer + 7, 21);
+                filename_ellipsis(text_buffer + 7, nextname_buffer, 21);
                 strcat(text_buffer, "'");
 
                 tele_usb_disk_render_line(text_buffer, line_no, marker);
@@ -660,7 +657,7 @@ static void disk_browse_button_timeout(void) {
     char filename[FNAME_BUFFER_LEN];
     disk_browse_read_sorted_filename(
             &s_file_index, filename, FNAME_BUFFER_LEN, index);
-    filename_ellipsis(filename, 28);
+    filename_ellipsis(filename, filename, 28);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);
 }
 
@@ -725,7 +722,7 @@ static void disk_browse_PollADC(int32_t data) {
                                                  filename,
                                                  FNAME_BUFFER_LEN,
                                                  first_entry + i);
-                filename_ellipsis(filename, 28);
+                filename_ellipsis(filename, filename, 28);
                 tele_usb_disk_render_line(filename,
                                           i + 1,
                                           (i == current_entry) ? kCurrent

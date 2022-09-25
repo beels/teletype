@@ -66,6 +66,7 @@ TEST filename_increment_test() {
 
 TEST filename_ellipsis_test() {
     char filename_buffer[FNAME_BUFFER_LEN];
+    char output_buffer[FNAME_BUFFER_LEN];
 
     struct data_type {
         char *in;
@@ -84,11 +85,12 @@ TEST filename_ellipsis_test() {
 
     for (int i = 0; i < sizeof(data) / sizeof(*data); ++i) {
         strncpy(filename_buffer, data[i].in, FNAME_BUFFER_LEN);
-        filename_ellipsis(filename_buffer, data[i].maxchars);
+        memset(output_buffer, 'X', FNAME_BUFFER_LEN);
+        filename_ellipsis(output_buffer, filename_buffer, data[i].maxchars);
 
         static char item[4];
         itoa(i, item, 10);
-        ASSERT_STR_EQm(item, data[i].out, filename_buffer);
+        ASSERT_STR_EQm(item, data[i].out, output_buffer);
     }
 
     PASS();

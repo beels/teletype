@@ -31,13 +31,13 @@ bool filename_find_wildcard_range(int *wildcard_start, char *filename)
     return false;
 }
 
-void filename_ellipsis(char *filename, int maxchars) {
-    // Re-write 'filename', trimming the file extension off the end and
-    // rendering the remainder as 'a...xxx' where 'xxx' are the last three
-    // characters of the non-extension part and 'a' is as much of the initial
-    // substring as will fit if the total length of the result is 'maxchars'.
-    // If the entire non-extension part will fit in 'maxchars', no ellipsis is
-    // added.
+void filename_ellipsis(char *output, char *filename, int maxchars) {
+    // Re-write 'filename' into 'output', trimming the file extension off the
+    // end and rendering the remainder as 'a...xxx' where 'xxx' are the last
+    // three characters of the non-extension part and 'a' is as much of the
+    // initial substring as will fit if the total length of the result is
+    // 'maxchars'.  If the entire non-extension part will fit in 'maxchars', no
+    // ellipsis is added.
     //
     // If maxchars is less than 6, we segfault.  Actual use cases will always
     // be at least 20.
@@ -50,22 +50,26 @@ void filename_ellipsis(char *filename, int maxchars) {
     }
 
     if ('.' == filename[i]) {
-        filename[i] = 0;
         length = i;
     }
 
     if (length <= maxchars) {
-        return;
+        strncpy(output, filename, length);
+        output[length] = 0;
     }
-
-    int tail = length - 3;
-    int ellipsis = maxchars - 5;
-    for (int i = 0; i < 2; ++i) {
-        filename[ellipsis + i] = '.';
+    else {
+        int tail = length - 3;
+        int ellipsis = maxchars - 5;
+        for (int i = 0; i < ellipsis; ++i) {
+            output[i] = filename[i];
+        }
+        for (int i = 0; i < 2; ++i) {
+            output[ellipsis + i] = '.';
+        }
+        for (int i = 0; i < 3; ++i) {
+            output[maxchars - 3 + i] = filename[tail + i];
+        }
+        output[maxchars] = 0;
     }
-    for (int i = 0; i < 3; ++i) {
-        filename[maxchars - 3 + i] = filename[tail + i];
-    }
-    filename[maxchars] = 0;
 }
 
