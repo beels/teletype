@@ -25,55 +25,10 @@ bool get_value_from_array(struct mergesort_accessor_struct *self,
 
 static char test_item[4];
 
-#if 0
-TEST mergesort_initialize_test() {
-    uint8_t out[7];
-    uint8_t temp[7];
-    char    work[3 * 4];
-
-    struct data_type input[] = {
-        {  0, "eee" },
-        {  1, "fff" },
-        {  2, "ddd" },
-        {  3, "ccc" },
-        {  4, "hhh" },
-        {  5, "aaa" },
-        {  6, "bbb" },
-        {  7, "ggg" },
-    };
-
-    mergesort_accessor_t accessor = { .data = input,
-                                      .get_value = get_value_from_array };
-
-    mergesort(out, temp, work, sizeof(work),
-              8, 4, &accessor);
-
-    struct data_type result[] = {
-        {  5, "aaa" },
-        {  6, "bbb" },
-        {  3, "ccc" },
-        {  2, "ddd" },
-        {  0, "eee" },
-        {  1, "fff" },
-        {  7, "ggg" },
-        {  4, "hhh" },
-    };
-
-    for (int i = 0; i < 8; ++i) {
-        itoa(i, test_item, 10);
-
-        ASSERT_EQm(test_item, out[i], result[i].index);
-        ASSERT_STR_EQm(test_item, input[out[i]].string, result[i].string);
-    }
-
-    PASS();
-}
-#endif
-
 TEST mergesort_one_element_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 1;
 
@@ -104,7 +59,7 @@ TEST mergesort_one_element_test() {
 TEST mergesort_two_sorted_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 2;
 
@@ -137,7 +92,7 @@ TEST mergesort_two_sorted_elements_test() {
 TEST mergesort_two_unsorted_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 2;
 
@@ -170,7 +125,7 @@ TEST mergesort_two_unsorted_elements_test() {
 TEST mergesort_three_sorted_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 3;
 
@@ -205,7 +160,7 @@ TEST mergesort_three_sorted_elements_test() {
 TEST mergesort_three_unsorted_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 3;
 
@@ -240,7 +195,7 @@ TEST mergesort_three_unsorted_elements_test() {
 TEST mergesort_three_reversed_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 3;
 
@@ -275,7 +230,7 @@ TEST mergesort_three_reversed_elements_test() {
 TEST mergesort_four_reversed_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 4;
 
@@ -312,7 +267,7 @@ TEST mergesort_four_reversed_elements_test() {
 TEST mergesort_five_unsorted_elements_test() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 5;
 
@@ -351,7 +306,7 @@ TEST mergesort_five_unsorted_elements_test() {
 TEST mergesort_five_unsorted_elements_test_2() {
     uint8_t out[7];
     uint8_t temp[7];
-    char    work[3 * 4];
+    char    work[3 * (4 + 2)];
 
     int num_items = 5;
 
@@ -390,7 +345,7 @@ TEST mergesort_five_unsorted_elements_test_2() {
 TEST mergesort_many_unsorted_elements_test() {
     uint8_t out[256];
     uint8_t temp[256];
-    char    work[16 * 6];
+    char    work[16 * (6 + 2)];
 
     int num_items = 217;
 
