@@ -12,7 +12,7 @@ typedef struct mergesort_accessor_struct {
 } mergesort_accessor_t;
 
 void mergesort(uint8_t *output_index, uint8_t *temp_index,
-               char *sort_buffer, uint8_t buffer_size,
+               char *sort_buffer, int buffer_size,
                int num_items, uint8_t item_maxlen,
                mergesort_accessor_t *accessor);
 

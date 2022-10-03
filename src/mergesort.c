@@ -2,21 +2,22 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
+#include <strings.h>
 
 static char *work_buffer = 0;
 static int work_len = 0;
 
-int mergesort_compare(const void *a_ptr, const void *b_ptr)
+static int mergesort_compare(const void *a_ptr, const void *b_ptr)
 {
     uint8_t a = *(const uint8_t *) a_ptr;
     uint8_t b = *(const uint8_t *) b_ptr;
 
-    return strncmp(work_buffer + (a * work_len), work_buffer + (b * work_len),
-                   work_len);
+    return strncasecmp(work_buffer + (a * work_len),
+                       work_buffer + (b * work_len),
+                       work_len);
 }
 
-void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
+static void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
                        int num_items, uint8_t item_maxlen,
                        int num_buckets, int partition_size,
                        uint8_t *buckets, uint8_t *string_locations,
@@ -58,9 +59,11 @@ void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
             //   sort)
             int num_shift = 0;
             for (int i = 1; i < num_buckets; ++i) {
-                if (0 > strncmp(sort_buffer + string_locations[i] * item_maxlen,
-                                sort_buffer + string_locations[0] * item_maxlen,
-                                item_maxlen))
+                int a_offset = string_locations[i] * item_maxlen;
+                int b_offset = string_locations[0] * item_maxlen;
+                if (0 > strncasecmp(sort_buffer + a_offset,
+                                    sort_buffer + b_offset,
+                                    item_maxlen))
                 {
                     num_shift++;
                 } else {
@@ -86,7 +89,7 @@ void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
 }
 
 void mergesort(uint8_t *output_index, uint8_t *temp_index,
-               char *sort_buffer, uint8_t buffer_size,
+               char *sort_buffer, int buffer_size,
                int num_items, uint8_t item_maxlen,
                mergesort_accessor_t *accessor)
 {

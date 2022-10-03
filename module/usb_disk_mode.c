@@ -19,7 +19,7 @@
 
 // this
 #include "filename.h"
-#include "sort.h"
+#include "mergesort.h"
 
 // asf
 #include "delay.h"
@@ -614,10 +614,10 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     }
 }
 
-static bool disk_browse_read_filename(sort_accessor_t *dummy,
+static bool disk_browse_read_filename(mergesort_accessor_t *dummy,
                                       char *filename, int len, uint8_t index) {
-    // The 'sort_accessor_t' argument is used in test doubles of this function
-    // to provide information about the dummy "filesystem".
+    // The 'mergesort_accessor_t' argument is used in test doubles of this
+    // function to provide information about the dummy "filesystem".
 
     if (nav_filelist_goto(index)
         && nav_filelist_validpos()
@@ -634,18 +634,13 @@ static bool disk_browse_read_filename(sort_accessor_t *dummy,
 }
 
 static void disk_browse_read_sorted_filename(
-                  sort_index_t *index, char *filename, int len, int position) {
-    if (sort_validate_slot(index, position)) {
-        disk_browse_read_filename(0, filename, len, index->values[position]);
-    }
-    else {
-        filename[0] = 0;
-    }
+                       uint8_t *index, char *filename, int len, int position) {
+    disk_browse_read_filename(0, filename, len, index[position]);
 }
 
 #define DISK_BROWSE_PAGE_SIZE 7
 
-static sort_index_t s_file_index;
+static uint8_t *s_file_index;
 static int disk_browse_num_files;
 static bool disk_browse_force_render;
 
@@ -654,7 +649,7 @@ static void disk_browse_button_timeout(void) {
 
     char filename[FNAME_BUFFER_LEN];
     disk_browse_read_sorted_filename(
-            &s_file_index, filename, FNAME_BUFFER_LEN, menu_selection);
+            s_file_index, filename, FNAME_BUFFER_LEN, menu_selection);
     filename_ellipsis(filename, filename, 28);
     tele_usb_disk_render_line(filename, selected_entry + 1, kSelected);
 }
@@ -691,7 +686,7 @@ static void disk_browse_navigate(int old_index, int new_index) {
         }
         else if (update_page || i == current_entry || i == last_entry) {
             char filename[FNAME_BUFFER_LEN];
-            disk_browse_read_sorted_filename(&s_file_index,
+            disk_browse_read_sorted_filename(s_file_index,
                                              filename,
                                              FNAME_BUFFER_LEN,
                                              first_entry + i);
@@ -741,7 +736,7 @@ static void disk_browse_short_press(void) {
 static void disk_browse_long_press(void) {
     // The save/load filename is the one selected.
 
-    disk_browse_read_sorted_filename(&s_file_index,
+    disk_browse_read_sorted_filename(s_file_index,
             filename_buffer, FNAME_BUFFER_LEN, menu_selection);
 
     // We have a concrete file, so no concept of "save next in series".
@@ -799,15 +794,18 @@ static void tele_usb_disk_browse_init(char *filename,
 
     // Create file index
     // We borrow the copy buffer for temporary storage of the file index.
-    s_file_index.index = (uint8_t *) copy_buffer;
-    s_file_index.values = ((uint8_t *) copy_buffer) + 256;
+    s_file_index = (uint8_t *) copy_buffer;
 
-    sort_accessor_t filename_accessor = {
+    mergesort_accessor_t filename_accessor = {
                         .data = 0,
-                        .get_string = disk_browse_read_filename
+                        .get_value = disk_browse_read_filename
                     };
 
-    sort_build_index(&s_file_index, disk_browse_num_files, &filename_accessor);
+    uint8_t temp_index[256];
+    mergesort(s_file_index, temp_index,
+              ((char *)copy_buffer) + 256, sizeof(copy_buffer) - 256,
+              disk_browse_num_files, FNAME_BUFFER_LEN,
+              &filename_accessor);
 
     // Force rendering of current page.
     disk_browse_force_render = true;
