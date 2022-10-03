@@ -10,7 +10,6 @@
 #include "teletype_io.h"
 #include "turtle_tests.h"
 #include "filename_tests.h"
-#include "sort_tests.h"
 #include "mergesort_tests.h"
 
 uint32_t tele_get_ticks() {
@@ -60,7 +59,6 @@ int main(int argc, char **argv) {
     RUN_SUITE(turtle_suite);
     RUN_SUITE(serialize_scene_suite);
     RUN_SUITE(filename_suite);
-    RUN_SUITE(sort_suite);
     RUN_SUITE(mergesort_suite);
 
     GREATEST_MAIN_END();
