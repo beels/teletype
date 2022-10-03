@@ -87,6 +87,7 @@ CSRCS = \
 	../src/chaos.c					\
 	../src/filename.c					\
 	../src/sort.c					\
+	../src/mergesort.c					\
 	../src/ops/op.c						\
 	../src/ops/ansible.c					\
 	../src/ops/controlflow.c				\
