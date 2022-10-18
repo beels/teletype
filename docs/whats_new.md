@@ -9,6 +9,8 @@
 - **FIX**: fix `EX.LP` not returning correct values
 - **IMP**: scene load/save code refactor, add scene load/save tests
 - **IMP**: fader ops now support up to four faderbanks
+- **NEW**: new Disting EX ops: dual algorithms, `EX.M.N#`, `EX.M.NO#`, `EX.M.CC#`
+- **FIX**: reset M timer when changing metro rate
 
 ## v4.0.0
 
