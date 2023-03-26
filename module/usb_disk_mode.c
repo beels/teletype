@@ -62,19 +62,19 @@ static void (*button_timeout_action)(void);
 static void (*long_press_action)(void);
 
 void tele_usb_putc(void* self_data, uint8_t c) {
-    file_putc(c);
+    XX file_putc(c);
 }
 
 void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size) {
-    file_write_buf(buffer, size);
+    XX file_write_buf(buffer, size);
 }
 
 uint16_t tele_usb_getc(void* self_data) {
-    return file_getc();
+    return XX file_getc();
 }
 
 bool tele_usb_eof(void* self_data) {
-    return file_eof() != 0;
+    return XX file_eof() != 0;
 }
 
 static int read_scaled_param(uint8_t resolution, uint8_t scale) {
@@ -245,7 +245,7 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 }
 
 void tele_usb_exec() {
-    uint8_t preset = flash_last_saved_scene();
+    uint8_t preset = XX flash_last_saved_scene();
 
     switch (menu_selection) {
         case kReadFile: {
@@ -277,8 +277,8 @@ void tele_usb_exec() {
         } break;
     }
 
-    nav_filelist_reset();
-    nav_exit();
+    XX nav_filelist_reset();
+    XX nav_exit();
 
     tele_usb_disk_finish();
 }
@@ -287,7 +287,7 @@ bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
     char temp_filename[FNAME_BUFFER_LEN];
 
     // Parse selected preset title
-    strcpy(temp_filename, flash_scene_text(preset, 0));
+    strcpy(temp_filename, XX flash_scene_text(preset, 0));
 
     if (0 == temp_filename[0]) {
         return false;
@@ -307,16 +307,16 @@ bool tele_usb_parse_target_filename(char *buffer, uint8_t preset) {
 }
 
 bool tele_usb_disk_iterate_filename(char *output, char *pattern) {
-    return nav_filelist_findname(pattern, false)
-        && nav_filelist_validpos()
-        && nav_file_getname(output, FNAME_BUFFER_LEN);
+    return XX nav_filelist_findname(pattern, false)
+        && XX nav_filelist_validpos()
+        && XX nav_file_getname(output, FNAME_BUFFER_LEN);
 }
 
 void tele_usb_disk_render_line(char *text, int line_no, int marker) {
     char text_buffer[DISPLAY_BUFFER_LEN];
-    u8 gutter = font_string_position(">", 1) + 2;
+    u8 gutter = XX font_string_position(">", 1) + 2;
 
-    region_fill(&line[line_no], 0);
+    XX region_fill(&line[line_no], 0);
 
     if (kCurrent == marker) {
         strcpy(text_buffer, ">");
@@ -328,11 +328,11 @@ void tele_usb_disk_render_line(char *text, int line_no, int marker) {
         strcpy(text_buffer, " ");
     }
 
-    font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
+    XX font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
 
-    font_string_region_clip(&line[line_no], text, gutter + 2, 0, 0xa, 0);
+    XX font_string_region_clip(&line[line_no], text, gutter + 2, 0, 0xa, 0);
 
-    region_draw(&line[line_no]);
+    XX region_draw(&line[line_no]);
 }
 
 void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
@@ -374,7 +374,7 @@ void tele_usb_disk_render_menu_line(int item, int line_no, int marker) {
         } break;
 
         case kExit: { // Menu line 4: Exit USB disk mode
-            uint8_t preset = flash_last_saved_scene();
+            uint8_t preset = XX flash_last_saved_scene();
             char preset_buffer[3];
             itoa(preset, preset_buffer, 10);
 
@@ -398,10 +398,10 @@ static void tele_usb_discover_filenames(void) {
         // print_dbg_ulong(lun);
 
         // Mount drive
-        nav_drive_set(lun);
-        if (!nav_partition_mount()) {
+        XX nav_drive_set(lun);
+        if (!XX nav_partition_mount()) {
 #if USB_DISK_TEST == 1
-            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
+            if (XX fs_g_status == FS_ERR_HW_NO_PRESENT) {
                 continue;
             }
             print_dbg("\r\nfail");
@@ -412,7 +412,7 @@ static void tele_usb_discover_filenames(void) {
         // Parse or generate target filename for selected preset
         nextname_buffer[0] = '\0';
         int wc_start;
-        uint8_t preset = flash_last_saved_scene();
+        uint8_t preset = XX flash_last_saved_scene();
         if (!tele_usb_parse_target_filename(filename_buffer, preset)) {
             char preset_buffer[3];
             itoa(preset, preset_buffer, 10);
@@ -446,7 +446,7 @@ static void tele_usb_discover_filenames(void) {
                 strcpy(filename_buffer + wc_start, "001.txt");
             }
 
-            nav_filelist_reset();
+            XX nav_filelist_reset();
         }
 
         break;
@@ -465,25 +465,25 @@ void tele_usb_disk_init() {
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
+        XX region_fill(&line[i], 0);
+        XX region_draw(&line[i]);
     }
 
     // Parse selected preset number
-    uint8_t preset = flash_last_saved_scene();
+    uint8_t preset = XX flash_last_saved_scene();
 
     // Print selected preset title
     {
         char preset_title[DISPLAY_BUFFER_LEN];
-        strcpy(preset_title, flash_scene_text(preset, 0));
+        strcpy(preset_title, XX flash_scene_text(preset, 0));
 
 
             // ARB:
             // Can we just use flash_scene_text directly here?
 
-        region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], preset_title, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+        XX region_fill(&line[0], 0);
+        XX font_string_region_clip(&line[0], preset_title, 2, 0, 0xa, 0);
+        XX region_draw(&line[0]);
     }
 
     // Menu items
@@ -527,12 +527,12 @@ void tele_usb_disk_write_file(char *filename, int preset) {
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    flash_read(preset, &scene, &text, 1, 1, 1);
+    XX flash_read(preset, &scene, &text, 1, 1, 1);
 
-    if (!nav_file_create((FS_STRING)filename)) {
-        if (fs_g_status != FS_ERR_FILE_EXIST) {
+    if (!XX nav_file_create((FS_STRING)filename)) {
+        if (XX fs_g_status != FS_ERR_FILE_EXIST) {
 #if USB_DISK_TEST == 1
-            if (fs_g_status == FS_LUN_WP) {
+            if (XX fs_g_status == FS_LUN_WP) {
                 // Test can be done only on no write protected
                 // device
                 return;
@@ -543,9 +543,9 @@ void tele_usb_disk_write_file(char *filename, int preset) {
         }
     }
 
-    if (!file_open(FOPEN_MODE_W)) {
+    if (!XX file_open(FOPEN_MODE_W)) {
 #if USB_DISK_TEST == 1
-        if (fs_g_status == FS_LUN_WP) {
+        if (XX fs_g_status == FS_LUN_WP) {
             // Test can be done only on no write protected
             // device
             return;
@@ -563,7 +563,7 @@ void tele_usb_disk_write_file(char *filename, int preset) {
         NULL;  // asf disk i/o holds state, no handles needed
     serialize_scene(&tele_usb_writer, &scene, &text);
 
-    file_close();
+    XX file_close();
 }
 
 
@@ -577,7 +577,7 @@ void tele_usb_disk_read_file(char *filename, int preset) {
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    if (nav_filelist_findname((FS_STRING)filename, 0)) {
+    if (XX nav_filelist_findname((FS_STRING)filename, 0)) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
         if (!file_open(FOPEN_MODE_R)) {
@@ -585,13 +585,13 @@ void tele_usb_disk_read_file(char *filename, int preset) {
             strcpy(text_buffer, "fail: ");
             strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
 
-            region_fill(&line[0], 0);
-            font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[0]);
+            XX region_fill(&line[0], 0);
+            XX font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+            XX region_draw(&line[0]);
             // print_dbg("\r\ncan't open");
         }
         else {
-            tt_deserializer_t tele_usb_reader;
+            XX tt_deserializer_t tele_usb_reader;
             tele_usb_reader.read_char = &tele_usb_getc;
             tele_usb_reader.eof = &tele_usb_eof;
             tele_usb_reader.print_dbg = &print_dbg;
@@ -599,8 +599,8 @@ void tele_usb_disk_read_file(char *filename, int preset) {
                 NULL;  // asf disk i/o holds state, no handles needed
             deserialize_scene(&tele_usb_reader, &scene, &text);
 
-            file_close();
-            flash_write(preset, &scene, &text);
+            XX file_close();
+            XX flash_write(preset, &scene, &text);
         }
     }
     else {
@@ -608,9 +608,9 @@ void tele_usb_disk_read_file(char *filename, int preset) {
         strcpy(text_buffer, "no file: ");
         strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 9);
 
-        region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+        XX region_fill(&line[0], 0);
+        XX font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
+        XX region_draw(&line[0]);
     }
 }
 
@@ -619,9 +619,9 @@ static bool disk_browse_read_filename(mergesort_accessor_t *dummy,
     // The 'mergesort_accessor_t' argument is used in test doubles of this
     // function to provide information about the dummy "filesystem".
 
-    if (nav_filelist_goto(index)
-        && nav_filelist_validpos()
-        && nav_file_getname(filename, len))
+    if (XX nav_filelist_goto(index)
+        && XX nav_filelist_validpos()
+        && XX nav_file_getname(filename, len))
     {
         // Success
         return true;
@@ -662,8 +662,8 @@ static void disk_browse_button_timeout(void) {
 static void handler_None(int32_t data) {}
 
 static void disk_browse_finish(void) {
-    nav_filelist_reset();
-    nav_exit();
+    XX nav_filelist_reset();
+    XX nav_exit();
 
     app_event_handlers[kEventPollADC] = &handler_None;
     tele_usb_disk_init();
@@ -681,8 +681,8 @@ static void disk_browse_navigate(int old_index, int new_index) {
 
     for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
         if (disk_browse_num_files <= first_entry + i) {
-            region_fill(&line[i + 1], 0);
-            region_draw(&line[i + 1]);
+            XX region_fill(&line[i + 1], 0);
+            XX region_draw(&line[i + 1]);
         }
         else if (update_page || i == current_entry || i == last_entry) {
             char filename[FNAME_BUFFER_LEN];
@@ -699,11 +699,11 @@ static void disk_browse_navigate(int old_index, int new_index) {
             if (i == current_entry) {
                 // Display title on line 0
 
-                region_fill(&line[0], 0x2);
+                XX region_fill(&line[0], 0x2);
 
-                if (file_open(FOPEN_MODE_R)) {
+                if (XX file_open(FOPEN_MODE_R)) {
                     uint8_t title[DISPLAY_BUFFER_LEN];
-                    file_read_buf(title, DISPLAY_MAX_LEN);
+                    XX file_read_buf(title, DISPLAY_MAX_LEN);
                     title[DISPLAY_MAX_LEN] = 0;
                     file_close();
                     for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
@@ -716,10 +716,10 @@ static void disk_browse_navigate(int old_index, int new_index) {
                         }
                     }
 
-                    font_string_region_clip(
+                    XX font_string_region_clip(
                             &line[0], (char *) title, 2, 0, 0xa, 0x2);
                 }
-                region_draw(&line[0]);
+                XX region_draw(&line[0]);
             }
         }
     }
@@ -779,12 +779,12 @@ static void tele_usb_disk_browse_init(char *filename,
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
+        XX region_fill(&line[i], 0);
+        XX region_draw(&line[i]);
     }
 
-    nav_filelist_single_enable(FS_FILE);
-    disk_browse_num_files = nav_filelist_nb(FS_FILE);
+    XX nav_filelist_single_enable(FS_FILE);
+    disk_browse_num_files = XX nav_filelist_nb(FS_FILE);
 
     // render browser
     char text_buffer[DISPLAY_BUFFER_LEN];
