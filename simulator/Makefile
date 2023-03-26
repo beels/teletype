@@ -1,7 +1,7 @@
 .PHONY: clean
 CFLAGS=-std=c99 -g -Wall -fno-common -DSIM -I. -I../src -I../libavr32/src
 DEPS =
-OBJ = tt.o ../src/teletype.o ../src/command.o ../src/helpers.o \
+OBJ = tt.o ../src/teletype.o ../src/command.o ../src/helpers.o ../src/drum_helpers.o \
 	../src/every.o ../src/match_token.o ../src/scanner.o \
 	../src/scale.o ../src/scene_serialization.o \
 	../src/state.o ../src/table.o ../src/turtle.o ../src/chaos.o \
@@ -15,7 +15,7 @@ OBJ = tt.o ../src/teletype.o ../src/command.o ../src/helpers.o \
 	../src/ops/fader.o ../src/ops/matrixarchate.o ../src/ops/wslash.o \
 	../src/ops/seed.o ../src/ops/i2c.o ../src/ops/disting.o \
 	../src/ops/wslashtape.o ../src/ops/wslashsynth.o ../src/ops/wslashdelay.o \
-	../src/ops/crow.o \
+	../src/ops/crow.o ../src/ops/i2c2midi.o\
 	../libavr32/src/euclidean/euclidean.o ../libavr32/src/euclidean/data.o \
 	../libavr32/src/music.o ../libavr32/src/util.o ../libavr32/src/random.o \
         ../src/ops/midi.o

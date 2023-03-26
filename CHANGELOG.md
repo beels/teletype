@@ -2,15 +2,23 @@
 
 ## v4.0.x
 
+- **FIX**: fix off-by-one error in `P.ROT` understanding of pattern length
+- **FIX**: fix `CROW.Q3` calls `ii.self.query2` instead of `ii.self.query3`
 - **FIX**: cache currently-running commands to avoid corruption during SCENE ops.
 - **FIX**: delay when opening docs
 - **FIX**: `PROB 100` would only execute 99.01% of the time.
 - **FIX**: some `G.FDR` configurations caused incorrect rendering in grid visualizer
 - **FIX**: fix `EX.LP` not returning correct values
+- **FIX**: fix `QT.B` handling of negative voltage input
 - **IMP**: scene load/save code refactor, add scene load/save tests
 - **IMP**: fader ops now support up to four faderbanks
 - **NEW**: new Disting EX ops: dual algorithms, `EX.M.N#`, `EX.M.NO#`, `EX.M.CC#`
 - **FIX**: reset M timer when changing metro rate
+- **NEW**: new Drum Ops: `DR.T`, `DR.V`, `DR.P`
+- **NEW**: [I2C2MIDI](https://github.com/attowatt/i2c2midi) ops
+- **FIX**: fixes a transcription error  in the SD drum helper patterns
+- **NEW**: Ten new patterns for `DR.V` and optimised old patterns
+- **FIX**: fix BPM rounding error
 
 ## v4.0.0
 

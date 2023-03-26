@@ -11,6 +11,7 @@
 #include "turtle_tests.h"
 #include "filename_tests.h"
 #include "mergesort_tests.h"
+#include "drum_helpers_tests.h"
 
 uint32_t tele_get_ticks() {
     return 0;
@@ -57,6 +58,7 @@ int main(int argc, char **argv) {
     RUN_SUITE(parser_suite);
     RUN_SUITE(process_suite);
     RUN_SUITE(turtle_suite);
+    RUN_SUITE(drum_helpers_suite);
     RUN_SUITE(serialize_scene_suite);
     RUN_SUITE(filename_suite);
     RUN_SUITE(mergesort_suite);
