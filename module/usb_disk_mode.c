@@ -198,7 +198,9 @@ void diskmenu_io_close(void) {
 
 bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode)
 {
-    if (file_open(fopen_mode)) {
+    int modes[2] = { FOPEN_MODE_R, FOPEN_MODE_W };
+
+    if (file_open(modes[fopen_mode])) {
         return true;
     }
 
@@ -238,7 +240,8 @@ bool diskmenu_io_create(uint8_t *status, char *filename) {
     }
 
     if (status) {
-        *status = fs_g_status;
+        *status = fs_g_status == FS_ERR_FILE_EXIST ? kErrFileExists
+                                                   : kErrUnknown ;
     }
 
     return false;
@@ -280,7 +283,9 @@ bool diskmenu_filelist_init(int *num_entries) {
 }
 
 bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern) {
-    if (nav_filelist_findname(pattern, false) && nav_filelist_validpos()) {
+    if (nav_filelist_findname((FS_STRING)pattern, false)
+        && nav_filelist_validpos())
+    {
         if (output) {
             return nav_file_getname(output, length);
         }
@@ -360,4 +365,7 @@ void diskmenu_flash_write(uint8_t scene_id,
     flash_write(scene_id, scene, text);
 }
 
+void diskmenu_dbg(const char *str) {
+    print_dbg(str);
+}
 

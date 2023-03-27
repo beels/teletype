@@ -9,6 +9,13 @@
 #include "state.h"
 #include "scene_serialization.h"
 
+enum {
+    kModeR,
+    kModeW,
+    kErrFileExists,
+    kErrUnknown,
+};
+
 // ============================================================================
 //                              SUBSYSTEM LOGIC
 // ----------------------------------------------------------------------------
@@ -67,5 +74,5 @@ void diskmenu_flash_write(
                      uint8_t scene_id,
                      scene_state_t *scene,
                      char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
-
+void diskmenu_dbg(const char *str);
 #endif

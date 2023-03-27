@@ -2,16 +2,16 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>  // for debugging
 
-#include "print_funcs.h"
-#include "file.h"
-#include "fs_com.h"
 #include "util.h"
 
 #include "diskmenu.h"
 #include "filename.h"
 #include "mergesort.h"
 #include "scene_serialization.h"
+
+#define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 // Local functions for usb filesystem serialization
 static void tele_usb_putc(void* self_data, uint8_t c);
@@ -134,13 +134,20 @@ static void main_menu_handle_PollADC(int index) {
 static void disk_browse_handle_PollADC(int index) {
     static int last_index = -10 * DISK_BROWSE_PAGE_SIZE;
 
-    if (disk_browse_force_render) {
-        last_index = -10 * DISK_BROWSE_PAGE_SIZE;
-        disk_browse_force_render = false;
-    }
+    if (disk_browse_force_render || index != last_index) {
+        if (disk_browse_force_render) {
+            disk_browse_force_render = false;
 
-    if (index != last_index) {
-        disk_browse_navigate(menu_selection, index);
+            // ARB: a kludge to trick disk_browse_navigate into thinking that
+            // we are on a new page.  Maybe just a flag would be more
+            // reasonable.
+
+            disk_browse_navigate(index + DISK_BROWSE_PAGE_SIZE, index);
+        }
+        else {
+            disk_browse_navigate(menu_selection, index);
+        }
+
 
         menu_selection = index;
         last_index = index;
@@ -313,7 +320,7 @@ void diskmenu_exec() {
         } break;
         default: {
             // error
-            print_dbg("\r\ninvalid action");
+            //xxx print_dbg("\r\ninvalid action");
             return;
         } break;
     }
@@ -484,7 +491,7 @@ void diskmenu_write_file(char *filename, int preset) {
     uint8_t status = 0;
     if (!diskmenu_io_create(&status, filename)) {
         // We still write the file if it already exists.
-        if (status != FS_ERR_FILE_EXIST) {
+        if (status != kErrFileExists) {
 #if USB_DISK_TEST == 1
             if (status == FS_LUN_WP) {
                 // Test can be done only on no write protected
@@ -497,7 +504,7 @@ void diskmenu_write_file(char *filename, int preset) {
         }
     }
 
-    if (!diskmenu_io_open(&status, FOPEN_MODE_W)) {
+    if (!diskmenu_io_open(&status, kModeW)) {
 #if USB_DISK_TEST == 1
         if (status == FS_LUN_WP) {
             // Test can be done only on no write protected
@@ -512,7 +519,7 @@ void diskmenu_write_file(char *filename, int preset) {
     tt_serializer_t tele_usb_writer;
     tele_usb_writer.write_char = &tele_usb_putc;
     tele_usb_writer.write_buffer = &tele_usb_write_buf;
-    tele_usb_writer.print_dbg = &print_dbg;
+    tele_usb_writer.print_dbg = &diskmenu_dbg;
     tele_usb_writer.data =
         NULL;  // asf disk i/o holds state, no handles needed
     serialize_scene(&tele_usb_writer, &scene, &text);
@@ -531,10 +538,10 @@ void diskmenu_read_file(char *filename, int preset) {
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    if (diskmenu_filelist_find(NULL, 0, (FS_STRING)filename)) {
+    if (diskmenu_filelist_find(NULL, 0, filename)) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
-        if (!diskmenu_io_open(NULL, FOPEN_MODE_R)) {
+        if (!diskmenu_io_open(NULL, kModeR)) {
             char text_buffer[DISPLAY_BUFFER_LEN];
             strcpy(text_buffer, "fail: ");
             strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
@@ -546,7 +553,7 @@ void diskmenu_read_file(char *filename, int preset) {
             tt_deserializer_t tele_usb_reader;
             tele_usb_reader.read_char = &tele_usb_getc;
             tele_usb_reader.eof = &tele_usb_eof;
-            tele_usb_reader.print_dbg = &print_dbg;
+            tele_usb_reader.print_dbg = &diskmenu_dbg;
             tele_usb_reader.data =
                 NULL;  // asf disk i/o holds state, no handles needed
             deserialize_scene(&tele_usb_reader, &scene, &text);
@@ -632,7 +639,7 @@ static void disk_browse_navigate(int old_index, int new_index) {
 
                 diskmenu_display_clear(0, 0x2);
 
-                if (diskmenu_io_open(NULL, FOPEN_MODE_R)) {
+                if (diskmenu_io_open(NULL, kModeR)) {
                     uint8_t title[DISPLAY_BUFFER_LEN];
 
             // ARB: remove after refactor: too slow in loop.
@@ -718,6 +725,12 @@ static void diskmenu_browse_init(char *filename,
               diskmenu_copy_buffer_length - 256,
               disk_browse_num_files, FNAME_BUFFER_LEN,
               &filename_accessor);
+
+
+            // ARB:
+            // We need a better way to trigger rendering here.
+            // - The last (unscaled?) value seen by pollADC should always be
+            //   available to the rest of the subsystem.
 
     // Force rendering of current page.
     disk_browse_force_render = true;

@@ -1,0 +1,147 @@
+#include <stdio.h>
+#include <inttypes.h>
+#include <stdbool.h>
+
+#include "ops/op.h"
+
+const tele_op_t *tele_ops[E_OP__LENGTH];
+const tele_mod_t *tele_mods[E_MOD__LENGTH];
+
+script_number_t turtle_get_script(scene_turtle_t* a) {
+    return 0;
+}
+
+void turtle_init(scene_turtle_t* a) {
+}
+
+void turtle_resolve_position(scene_turtle_t* a, turtle_position_t* b,
+                             turtle_position_t* c) {
+}
+
+uint32_t tele_get_ticks() {
+    return 0;
+}
+
+void tele_metro_updated() {
+    printf("METRO UPDATED");
+    printf("\n");
+}
+
+void tele_metro_reset() {
+    printf("METRO RESET");
+    printf("\n");
+}
+
+void tele_tr(uint8_t i, int16_t v) {
+    printf("TR  i:%" PRIu8 " v:%" PRId16, i, v);
+    printf("\n");
+}
+
+void tele_cv(uint8_t i, int16_t v, uint8_t s) {
+    printf("CV  i:%" PRIu8 " v:%" PRId16 " s:%" PRIu8, i, v, s);
+    printf("\n");
+}
+
+void tele_cv_slew(uint8_t i, int16_t v) {
+    printf("CV_SLEW  i:%" PRIu8 " v:%" PRId16, i, v);
+    printf("\n");
+}
+
+void tele_update_adc(uint8_t force) {
+    printf("UPDATE ADC force:%s", force ? "true" : "false");
+    printf("\n");
+}
+
+void tele_has_delays(bool i) {
+    printf("DELAY  i:%s", i ? "true" : "false");
+    printf("\n");
+}
+
+void tele_has_stack(bool i) {
+    printf("STACK  i:%s", i ? "true" : "false");
+    printf("\n");
+}
+
+void tele_cv_off(uint8_t i, int16_t v) {
+    printf("CV_OFF  i:%" PRIu8 " v:%" PRId16, i, v);
+    printf("\n");
+}
+
+void tele_ii_tx(uint8_t addr, uint8_t *data, uint8_t l) {
+    printf("II_tx  addr:%" PRIu8 " l:%" PRIu8, addr, l);
+    printf("\n");
+    for (size_t i = 0; i < l; i++) {
+        printf("[%" PRIuPTR "] = %" PRIu8 "\n", i, data[i]);
+    }
+}
+
+void tele_vars_updated() {}
+
+void device_flip() {}
+
+void set_live_submode(uint8_t submode) {
+    printf("SET_LIVE_SUBMODE submode:%" PRIu8, submode);
+    printf("\n");
+}
+
+void select_dash_screen(uint8_t screen) {
+    printf("SELECT_DASH_SCREEN screen:%" PRIu8, screen);
+    printf("\n");
+}
+
+void print_dashboard_value(uint8_t index, int16_t value) {
+    printf("PRINT_DASHBOARD_VALUE  index:%" PRIu8 " value:%" PRId16, index,
+           value);
+    printf("\n");
+}
+
+int16_t get_dashboard_value(uint8_t index) {
+    printf("GET_DASHBOARD_VALUE index:%" PRIu8, index);
+    printf("\n");
+    return 0;
+}
+
+void reset_midi_counter() {}
+
+void tele_ii_rx(uint8_t addr, uint8_t *data, uint8_t l) {
+    printf("II_rx  addr:%" PRIu8 " l:%" PRIu8, addr, l);
+    printf("\n");
+}
+
+void tele_scene(uint8_t i, uint8_t init_grid, uint8_t init_pattern) {
+    printf("SCENE  i:%" PRIu8, i);
+    printf("\n");
+}
+
+void tele_pattern_updated() {
+    printf("PATTERN UPDATED");
+    printf("\n");
+}
+
+void tele_kill() {
+    printf("KILL");
+    printf("\n");
+}
+
+void tele_mute() {
+    printf("MUTE");
+    printf("\n");
+}
+
+bool tele_get_input_state(uint8_t n) {
+    printf("INPUT_STATE  n:%" PRIu8, n);
+    printf("\n");
+    return false;
+}
+
+void tele_save_calibration() {}
+
+void tele_profile_script(size_t s) {}
+void tele_profile_delay(uint8_t d) {}
+
+void grid_key_press(uint8_t x, uint8_t y, uint8_t z) {
+    printf("GRID KEY PRESS x:%" PRIu8 " y:%" PRIu8 " z:%" PRIu8, x, y, z);
+    printf("\n");
+}
+
+
