@@ -61,6 +61,14 @@ static bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern);
 static bool diskmenu_filelist_goto(char *output, int len, uint8_t index);
 static void diskmenu_filelist_close(void);
 // display
+static void diskmenu_display_clear(int line_no, uint8_t bg);
+static void diskmenu_display_set(int line_no,
+                                 uint8_t offset,
+                                 const char *text,
+                                 uint8_t fg,
+                                 uint8_t bg);
+static void diskmenu_display_draw(int line_no);
+static void diskmenu_display_line(int line_no, const char *text);
 
 // Subsystem control
 void tele_usb_disk(void);
@@ -180,6 +188,7 @@ bool diskmenu_device_open(void) {
 
 bool diskmenu_device_close(void) {
     // No-op.
+    return true;
 }
 
 bool diskmenu_filelist_init(int *num_entries) {
@@ -220,7 +229,36 @@ void diskmenu_filelist_close() {
     nav_exit();
 }
 
+void diskmenu_display_clear(int line_no, uint8_t bg) {
+    region_fill(&line[line_no], bg);
+}
+
+void diskmenu_display_set(int line_no,
+                          uint8_t offset,
+                          const char *text,
+                          uint8_t fg,
+                          uint8_t bg)
+{
+    font_string_region_clip(&line[line_no], text, offset + 2, 0, fg, bg);
+}
+
+void diskmenu_display_draw(int line_no) {
+    region_draw(&line[line_no]);
+}
+
+void diskmenu_display_line(int line_no, const char *text)
+{
+    region_fill(&line[line_no], 0);
+
+    if (text && text[0]) {
+        font_string_region_clip(&line[line_no], text, 2, 0, 0xa, 0);
+    }
+
+    region_draw(&line[line_no]);
+}
+
 static int read_scaled_param(uint8_t resolution, uint8_t scale) {
+
     // The knob has a 12 bit range, and has a fair amount of jitter in the low
     // bits.  Division into more than 64 zones becomes increasingly unstable.
     //
@@ -456,7 +494,7 @@ void diskmenu_render_line(char *text, int line_no, int marker) {
     char text_buffer[DISPLAY_BUFFER_LEN];
     u8 gutter = font_string_position(">", 1) + 2;
 
-    region_fill(&line[line_no], 0);
+    diskmenu_display_clear(line_no, 0);
 
     if (kCurrent == marker) {
         strcpy(text_buffer, ">");
@@ -468,11 +506,10 @@ void diskmenu_render_line(char *text, int line_no, int marker) {
         strcpy(text_buffer, " ");
     }
 
-    font_string_region_clip(&line[line_no], text_buffer, 2, 0, 0xa, 0);
+    diskmenu_display_set(line_no, 0, text_buffer, 0xa, 0);
+    diskmenu_display_set(line_no, gutter, text, 0xa, 0);
 
-    font_string_region_clip(&line[line_no], text, gutter + 2, 0, 0xa, 0);
-
-    region_draw(&line[line_no]);
+    diskmenu_display_draw(line_no);
 }
 
 void diskmenu_render_menu_line(int item, int line_no, int marker) {
@@ -587,8 +624,7 @@ void tele_usb_disk_init() {
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
+        diskmenu_display_line(i, NULL);
     }
 
     // Parse selected preset number
@@ -603,9 +639,7 @@ void tele_usb_disk_init() {
             // ARB:
             // Can we just use flash_scene_text directly here?
 
-        region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], preset_title, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+        diskmenu_display_line(0, preset_title);
     }
 
     // Menu items
@@ -662,7 +696,7 @@ void diskmenu_write_file(char *filename, int preset) {
 
     flash_read(preset, &scene, &text, 1, 1, 1);
 
-    uint8_t status;
+    uint8_t status = 0;
     if (!diskmenu_io_create(&status, filename)) {
         // We still write the file if it already exists.
         if (status != FS_ERR_FILE_EXIST) {
@@ -720,9 +754,7 @@ void diskmenu_read_file(char *filename, int preset) {
             strcpy(text_buffer, "fail: ");
             strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
 
-            region_fill(&line[0], 0);
-            font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-            region_draw(&line[0]);
+            diskmenu_display_line(0, text_buffer);
             // print_dbg("\r\ncan't open");
         }
         else {
@@ -743,9 +775,7 @@ void diskmenu_read_file(char *filename, int preset) {
         strcpy(text_buffer, "no file: ");
         strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 9);
 
-        region_fill(&line[0], 0);
-        font_string_region_clip(&line[0], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
+        diskmenu_display_line(0, text_buffer);
     }
 }
 
@@ -812,8 +842,7 @@ static void disk_browse_navigate(int old_index, int new_index) {
 
     for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
         if (disk_browse_num_files <= first_entry + i) {
-            region_fill(&line[i + 1], 0);
-            region_draw(&line[i + 1]);
+            diskmenu_display_line(i + 1, NULL);
         }
         else if (update_page || i == current_entry || i == last_entry) {
             char filename[FNAME_BUFFER_LEN];
@@ -830,7 +859,7 @@ static void disk_browse_navigate(int old_index, int new_index) {
             if (i == current_entry) {
                 // Display title on line 0
 
-                region_fill(&line[0], 0x2);
+                diskmenu_display_clear(0, 0x2);
 
                 if (diskmenu_io_open(NULL, FOPEN_MODE_R)) {
                     uint8_t title[DISPLAY_BUFFER_LEN];
@@ -850,10 +879,9 @@ static void disk_browse_navigate(int old_index, int new_index) {
                         }
                     }
 
-                    font_string_region_clip(
-                            &line[0], (char *) title, 2, 0, 0xa, 0x2);
+                    diskmenu_display_set(0, 0, (char *) title, 0xa, 0x2);
                 }
-                region_draw(&line[0]);
+                diskmenu_display_draw(0);
             }
         }
     }
@@ -913,8 +941,7 @@ static void diskmenu_browse_init(char *filename,
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
+        diskmenu_display_line(i, NULL);
     }
 
     diskmenu_filelist_init(&disk_browse_num_files);
