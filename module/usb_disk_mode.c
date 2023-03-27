@@ -42,18 +42,25 @@ uint16_t tele_usb_getc(void* self_data);
 bool tele_usb_eof(void* self_data);
 
 // Local functions for test/simulator abstraction
-// filesystem
+// file IO
 static void diskmenu_io_close(void);
-static bool diskmenu_io_open(uint8_t fopen_mode);
-
+static bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode);
             // ARB: remove after refactor
-
 static uint16_t diskmenu_io_read_buf(uint8_t *buffer,
                                           uint16_t u16_buf_size);
 static void diskmenu_io_putc(uint8_t c);
 static void diskmenu_io_write_buf(uint8_t* buffer, uint16_t size);
 static uint16_t diskmenu_io_getc(void);
 static bool diskmenu_io_eof(void);
+static bool diskmenu_io_create(uint8_t *status, char *filename);
+// filesystem navigation
+static bool diskmenu_device_open(void);
+static bool diskmenu_device_close(void);
+static bool diskmenu_filelist_init(int *num_entries);
+static bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern);
+static bool diskmenu_filelist_goto(char *output, int len, uint8_t index);
+static void diskmenu_filelist_close(void);
+// display
 
 // Subsystem control
 void tele_usb_disk(void);
@@ -104,9 +111,17 @@ void diskmenu_io_close(void) {
     file_close();
 }
 
-bool diskmenu_io_open(uint8_t fopen_mode)
+bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode)
 {
-    return file_open(fopen_mode);
+    if (file_open(fopen_mode)) {
+        return true;
+    }
+
+    if (status) {
+        *status = fs_g_status;
+    }
+
+    return false;
 }
 
 uint16_t diskmenu_io_read_buf(uint8_t *buffer, uint16_t u16_buf_size)
@@ -130,6 +145,79 @@ uint16_t diskmenu_io_getc(void) {
 
 bool diskmenu_io_eof(void) {
     return file_eof() != 0;
+}
+
+bool diskmenu_io_create(uint8_t *status, char *filename) {
+    if (nav_file_create((FS_STRING) filename)) {
+        return false;
+    }
+
+    if (status) {
+        *status = fs_g_status;
+    }
+
+    return false;
+}
+
+bool diskmenu_device_open(void) {
+    // We assume that there is one and only one available LUN, otherwise it is
+    // not safe to iterate through all possible LUN even after we finish
+    // writing and reading scenes.
+
+    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
+        // print_dbg("\r\nlun: ");
+        // print_dbg_ulong(lun);
+
+        // Mount drive
+        nav_drive_set(lun);
+        if (nav_partition_mount()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool diskmenu_device_close(void) {
+    // No-op.
+}
+
+bool diskmenu_filelist_init(int *num_entries) {
+    if (nav_filelist_single_enable(FS_FILE)) {
+        if (num_entries) {
+            *num_entries = nav_filelist_nb(FS_FILE);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern) {
+    if (nav_filelist_findname(pattern, false) && nav_filelist_validpos()) {
+        if (output) {
+            return nav_file_getname(output, length);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
+    if (nav_filelist_goto(index) && nav_filelist_validpos()) {
+        if (output) {
+            return nav_file_getname(output, length);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+void diskmenu_filelist_close() {
+    nav_filelist_reset();
+    nav_exit();
 }
 
 static int read_scaled_param(uint8_t resolution, uint8_t scale) {
@@ -332,8 +420,7 @@ void diskmenu_exec() {
         } break;
     }
 
-    nav_filelist_reset();
-    nav_exit();
+    diskmenu_filelist_close();
 
     tele_usb_disk_finish();
 }
@@ -362,9 +449,7 @@ bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
 }
 
 bool diskmenu_iterate_filename(char *output, char *pattern) {
-    return nav_filelist_findname(pattern, false)
-        && nav_filelist_validpos()
-        && nav_file_getname(output, FNAME_BUFFER_LEN);
+    return diskmenu_filelist_find(output, FNAME_BUFFER_LEN, pattern);
 }
 
 void diskmenu_render_line(char *text, int line_no, int marker) {
@@ -443,69 +528,51 @@ void diskmenu_render_menu_line(int item, int line_no, int marker) {
     }
 }
 
-static void diskmenu_discover_filenames(void) {
-    // We assume that there is one and only one available LUN, otherwise it is
-    // not safe to iterate through all possible LUN even after we finish
-    // writing and reading scenes.
-
-    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
-        // print_dbg("\r\nlun: ");
-        // print_dbg_ulong(lun);
-
-        // Mount drive
-        nav_drive_set(lun);
-        if (!nav_partition_mount()) {
-#if USB_DISK_TEST == 1
-            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
-                continue;
-            }
-            print_dbg("\r\nfail");
-#endif
-            continue;
-        }
-
-        // Parse or generate target filename for selected preset
-        nextname_buffer[0] = '\0';
-        int wc_start;
-        uint8_t preset = flash_last_saved_scene();
-        if (!diskmenu_parse_target_filename(filename_buffer, preset)) {
-            char preset_buffer[3];
-            itoa(preset, preset_buffer, 10);
-            strcpy(filename_buffer, "tt00");
-            if (10 <= preset) {
-                strcpy(filename_buffer + 2, preset_buffer);
-            }
-            else if (0 < preset) {
-                strcpy(filename_buffer + 3, preset_buffer);
-            }
-            strcpy(filename_buffer + 4, ".txt");
-        }
-        else if (filename_find_wildcard_range(&wc_start, filename_buffer))
-        {
-            while(diskmenu_iterate_filename(nextname_buffer,
-                                                 filename_buffer))
-            {
-                ; // Do nothing
-            }
-
-            if (nextname_buffer[0]) {
-                // We found at least one matching file.
-                strncpy(filename_buffer,
-                        nextname_buffer,
-                        sizeof(filename_buffer));
-
-                filename_increment_version(nextname_buffer, wc_start);
-            }
-            else {
-                // We supply a default filename based on the title.
-                strcpy(filename_buffer + wc_start, "001.txt");
-            }
-
-            nav_filelist_reset();
-        }
-
-        break;
+static bool diskmenu_discover_filenames(void) {
+    if (!diskmenu_device_open()) {
+        return false;
     }
+
+    // Parse or generate target filename for selected preset
+    nextname_buffer[0] = '\0';
+    int wc_start;
+    uint8_t preset = flash_last_saved_scene();
+    if (!diskmenu_parse_target_filename(filename_buffer, preset)) {
+        char preset_buffer[3];
+        itoa(preset, preset_buffer, 10);
+        strcpy(filename_buffer, "tt00");
+        if (10 <= preset) {
+            strcpy(filename_buffer + 2, preset_buffer);
+        }
+        else if (0 < preset) {
+            strcpy(filename_buffer + 3, preset_buffer);
+        }
+        strcpy(filename_buffer + 4, ".txt");
+    }
+    else if (filename_find_wildcard_range(&wc_start, filename_buffer)) {
+        diskmenu_filelist_init(NULL);
+
+        while(diskmenu_iterate_filename(nextname_buffer, filename_buffer)) {
+            ; // Do nothing
+        }
+
+        if (nextname_buffer[0]) {
+            // We found at least one matching file.
+            strncpy(filename_buffer,
+                    nextname_buffer,
+                    sizeof(filename_buffer));
+
+            filename_increment_version(nextname_buffer, wc_start);
+        }
+        else {
+            // We supply a default filename based on the title.
+            strcpy(filename_buffer + wc_start, "001.txt");
+        }
+
+        diskmenu_filelist_close();
+    }
+
+    return true;
 }
 
 void tele_usb_disk_init() {
@@ -570,9 +637,20 @@ void tele_usb_disk() {
     // disable timers
     default_timers_enabled = false;
 
-    diskmenu_discover_filenames();
+    if (diskmenu_discover_filenames()) {
+        tele_usb_disk_init();
+    }
+    else {
+        // Exit usb disk mode
 
-    tele_usb_disk_init();
+
+            // ARB: need to add failure feedback on display
+
+        // Clear screen; show error message
+        // Pause for a second, or prompt for key press
+
+        tele_usb_disk_finish();
+    }
 }
 
 void diskmenu_write_file(char *filename, int preset) {
@@ -584,10 +662,12 @@ void diskmenu_write_file(char *filename, int preset) {
 
     flash_read(preset, &scene, &text, 1, 1, 1);
 
-    if (!nav_file_create((FS_STRING)filename)) {
-        if (fs_g_status != FS_ERR_FILE_EXIST) {
+    uint8_t status;
+    if (!diskmenu_io_create(&status, filename)) {
+        // We still write the file if it already exists.
+        if (status != FS_ERR_FILE_EXIST) {
 #if USB_DISK_TEST == 1
-            if (fs_g_status == FS_LUN_WP) {
+            if (status == FS_LUN_WP) {
                 // Test can be done only on no write protected
                 // device
                 return;
@@ -598,9 +678,9 @@ void diskmenu_write_file(char *filename, int preset) {
         }
     }
 
-    if (!diskmenu_io_open(FOPEN_MODE_W)) {
+    if (!diskmenu_io_open(&status, FOPEN_MODE_W)) {
 #if USB_DISK_TEST == 1
-        if (fs_g_status == FS_LUN_WP) {
+        if (status == FS_LUN_WP) {
             // Test can be done only on no write protected
             // device
             return;
@@ -632,10 +712,10 @@ void diskmenu_read_file(char *filename, int preset) {
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    if (nav_filelist_findname((FS_STRING)filename, 0)) {
+    if (diskmenu_filelist_find(NULL, 0, (FS_STRING)filename)) {
         // print_dbg("\r\nfound: ");
         // print_dbg(filename_buffer);
-        if (!diskmenu_io_open(FOPEN_MODE_R)) {
+        if (!diskmenu_io_open(NULL, FOPEN_MODE_R)) {
             char text_buffer[DISPLAY_BUFFER_LEN];
             strcpy(text_buffer, "fail: ");
             strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
@@ -674,10 +754,7 @@ static bool disk_browse_read_filename(mergesort_accessor_t *dummy,
     // The 'mergesort_accessor_t' argument is used in test doubles of this
     // function to provide information about the dummy "filesystem".
 
-    if (nav_filelist_goto(index)
-        && nav_filelist_validpos()
-        && nav_file_getname(filename, len))
-    {
+    if (diskmenu_filelist_goto(filename, len, index)) {
         // Success
         return true;
     }
@@ -717,8 +794,7 @@ static void disk_browse_button_timeout(void) {
 static void handler_None(int32_t data) {}
 
 static void disk_browse_finish(void) {
-    nav_filelist_reset();
-    nav_exit();
+    diskmenu_filelist_close();
 
     app_event_handlers[kEventPollADC] = &handler_None;
     tele_usb_disk_init();
@@ -756,7 +832,7 @@ static void disk_browse_navigate(int old_index, int new_index) {
 
                 region_fill(&line[0], 0x2);
 
-                if (diskmenu_io_open(FOPEN_MODE_R)) {
+                if (diskmenu_io_open(NULL, FOPEN_MODE_R)) {
                     uint8_t title[DISPLAY_BUFFER_LEN];
 
             // ARB: remove after refactor: too slow in loop.
@@ -823,8 +899,8 @@ static void disk_browse_PollADC(int32_t data) {
 }
 
 static void diskmenu_browse_init(char *filename,
-                                      char *nextname,
-                                      int preset)
+                                 char *nextname,
+                                 int preset)
 {
     // Set event handlers
     short_press_action = &disk_browse_short_press;
@@ -841,8 +917,7 @@ static void diskmenu_browse_init(char *filename,
         region_draw(&line[i]);
     }
 
-    nav_filelist_single_enable(FS_FILE);
-    disk_browse_num_files = nav_filelist_nb(FS_FILE);
+    diskmenu_filelist_init(&disk_browse_num_files);
 
     // render browser
     char text_buffer[DISPLAY_BUFFER_LEN];
