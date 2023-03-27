@@ -69,6 +69,17 @@ static void diskmenu_display_set(int line_no,
                                  uint8_t bg);
 static void diskmenu_display_draw(int line_no);
 static void diskmenu_display_line(int line_no, const char *text);
+// flash
+static uint8_t diskmenu_flash_scene_id(void);
+static void diskmenu_flash_read(
+                             uint8_t scene_id,
+                             scene_state_t *scene,
+                             char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
+static const char *diskmenu_flash_scene_text(uint8_t scene_id);
+static void diskmenu_flash_write(
+                            uint8_t scene_id,
+                            scene_state_t *scene,
+                            char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
 
 // Subsystem control
 void tele_usb_disk(void);
@@ -257,6 +268,29 @@ void diskmenu_display_line(int line_no, const char *text)
     region_draw(&line[line_no]);
 }
 
+uint8_t diskmenu_flash_scene_id(void) {
+    return flash_last_saved_scene();
+}
+
+void diskmenu_flash_read(uint8_t scene_id,
+                         scene_state_t *scene,
+                         char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
+{
+    flash_read(scene_id, scene, text, 1, 1, 1);
+}
+
+const char *diskmenu_flash_scene_text(uint8_t scene_id) {
+    return flash_scene_text(scene_id, 0);
+}
+
+void diskmenu_flash_write(uint8_t scene_id,
+                          scene_state_t *scene,
+                          char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
+{
+    flash_write(scene_id, scene, text);
+}
+
+
 static int read_scaled_param(uint8_t resolution, uint8_t scale) {
 
     // The knob has a 12 bit range, and has a fair amount of jitter in the low
@@ -426,7 +460,7 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 }
 
 void diskmenu_exec() {
-    uint8_t preset = flash_last_saved_scene();
+    uint8_t preset = diskmenu_flash_scene_id();
 
     switch (menu_selection) {
         case kReadFile: {
@@ -467,7 +501,7 @@ bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
     char temp_filename[FNAME_BUFFER_LEN];
 
     // Parse selected preset title
-    strcpy(temp_filename, flash_scene_text(preset, 0));
+    strcpy(temp_filename, diskmenu_flash_scene_text(preset));
 
     if (0 == temp_filename[0]) {
         return false;
@@ -551,7 +585,7 @@ void diskmenu_render_menu_line(int item, int line_no, int marker) {
         } break;
 
         case kExit: { // Menu line 4: Exit USB disk mode
-            uint8_t preset = flash_last_saved_scene();
+            uint8_t preset = diskmenu_flash_scene_id();
             char preset_buffer[3];
             itoa(preset, preset_buffer, 10);
 
@@ -573,7 +607,7 @@ static bool diskmenu_discover_filenames(void) {
     // Parse or generate target filename for selected preset
     nextname_buffer[0] = '\0';
     int wc_start;
-    uint8_t preset = flash_last_saved_scene();
+    uint8_t preset = diskmenu_flash_scene_id();
     if (!diskmenu_parse_target_filename(filename_buffer, preset)) {
         char preset_buffer[3];
         itoa(preset, preset_buffer, 10);
@@ -628,16 +662,16 @@ void tele_usb_disk_init() {
     }
 
     // Parse selected preset number
-    uint8_t preset = flash_last_saved_scene();
+    uint8_t preset = diskmenu_flash_scene_id();
 
     // Print selected preset title
     {
         char preset_title[DISPLAY_BUFFER_LEN];
-        strcpy(preset_title, flash_scene_text(preset, 0));
+        strcpy(preset_title, diskmenu_flash_scene_text(preset));
 
 
             // ARB:
-            // Can we just use flash_scene_text directly here?
+            // Can we just use diskmenu_flash_scene_text directly here?
 
         diskmenu_display_line(0, preset_title);
     }
@@ -694,7 +728,7 @@ void diskmenu_write_file(char *filename, int preset) {
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    flash_read(preset, &scene, &text, 1, 1, 1);
+    diskmenu_flash_read(preset, &scene, &text);
 
     uint8_t status = 0;
     if (!diskmenu_io_create(&status, filename)) {
@@ -767,7 +801,7 @@ void diskmenu_read_file(char *filename, int preset) {
             deserialize_scene(&tele_usb_reader, &scene, &text);
 
             diskmenu_io_close();
-            flash_write(preset, &scene, &text);
+            diskmenu_flash_write(preset, &scene, &text);
         }
     }
     else {
