@@ -86,6 +86,7 @@ CSRCS = \
 	../src/teletype.c					\
 	../src/turtle.c					\
 	../src/chaos.c					\
+	../src/diskmenu.c					\
 	../src/filename.c					\
 	../src/mergesort.c					\
 	../src/ops/op.c						\

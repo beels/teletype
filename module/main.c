@@ -741,6 +741,8 @@ void assign_main_event_handlers() {
 void assign_msc_event_handlers(void) {
     empty_event_handlers();
 
+    app_event_handlers[kEventPollADC] = &tele_usb_disk_PollADC;
+
     // one day this could be used to map the front button and pot to be used as
     // a UI with a memory stick
 
