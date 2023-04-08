@@ -117,13 +117,16 @@ void diskmenu_filelist_close(void) {
 
 // display
 #define DISPLAY_LINE_MAXLEN 42
-char display_lines[8][DISPLAY_LINE_MAXLEN + 1];
+char display_lines[8][DISPLAY_LINE_MAXLEN + 5 + 1];
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {
     for (int i = 0; i < DISPLAY_LINE_MAXLEN; ++i) {
         display_lines[line_no][i] = ' ';
     }
     display_lines[line_no][DISPLAY_LINE_MAXLEN] = '\0';
+    strncpy(display_lines[line_no] + DISPLAY_LINE_MAXLEN + 1,
+            "omfg", 4);
+    display_lines[line_no][DISPLAY_LINE_MAXLEN + 5] = '\0';
 }
 
 void diskmenu_display_set(int line_no,

@@ -16,10 +16,6 @@ extern char display_lines[8][43];
 void diskmenu_display_init(void);
 void diskmenu_display_print(void);
 
-void done() {
-    printf("Exiting diskmenu subsystem\n");
-}
-
 enum {
     kQuit,
     kShort,
@@ -49,6 +45,13 @@ int parse_dm(const char *in, int *arg) {
     return -1;
 }
 
+int simulator_active = 1;
+
+void done() {
+    printf("Exiting diskmenu subsystem\n");
+    simulator_active = 0;
+}
+
 int main() {
     char *in;
     time_t t;
@@ -66,8 +69,7 @@ int main() {
 
     diskmenu_init();
 
-    int active = 1;
-    while (active) {
+    while (simulator_active) {
 
         diskmenu_display_print();
 
@@ -106,7 +108,7 @@ int main() {
                 } break;
             case kQuit:
                 {
-                    active = 0;
+                    simulator_active = 0;
                 } break;
             default: {
                 printf("Unrecognized: %s\n", in);
