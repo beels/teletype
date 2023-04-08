@@ -41,58 +41,6 @@ static void tele_usb_disk_finish(void);
 //                                 Utilities
 // ----------------------------------------------------------------------------
 
-static int read_scaled_param(uint8_t resolution, uint8_t scale) {
-
-    // The knob has a 12 bit range, and has a fair amount of jitter in the low
-    // bits.  Division into more than 64 zones becomes increasingly unstable.
-    //
-    // Intentional knob movement is detected by
-    // adc[1] >> 8 != last_knob >> 8
-    //
-    // Knob turns seem to be considered volatile, so to ensure that there is no
-    // jitter in the output for selection-style values, it can be desireable to
-    // have every other value in a selection-style param be a dead zone.
-    //
-    // ```
-    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
-    // uint8_t deadzone = value & 1;
-    // value >>= 1;
-    // if (deadzone || abs(value - last_value) < 2) {
-    //     return;
-    // }
-    // last_value = value;
-    // // now do stuff
-    // ```
-
-    static uint16_t last_knob = 0;
-
-    uint16_t adc[4];
-
-    adc_convert(&adc);
-
-    uint16_t value = adc[1] >> (12 - (1 + resolution));
-
-    uint16_t deadzone = value & 1;
-    value >>= 1;
-
-    if (deadzone || abs(value - last_knob) < 2) {
-        value = last_knob;
-    }
-    else {
-        last_knob = value;
-    }
-
-    // Now scale the value, which right now is at knob resolution.
-
-    value = value / ((1 << resolution) / scale);
-
-    if (scale - 1 < value) {
-        value = scale - 1;
-    }
-
-    return value;
-}
-
 static int button_counter = 0;
 static bool long_press = false;
 
@@ -183,9 +131,7 @@ void tele_usb_disk_handler_KeyTimer(int32_t data) {
 }
 
 void tele_usb_disk_PollADC(int32_t data) {
-    int index = read_scaled_param(10, diskmenu_param_scale());
-
-    diskmenu_handle_PollADC(index);
+    diskmenu_handle_PollADC();
 }
 
 // ============================================================================
@@ -367,5 +313,57 @@ void diskmenu_flash_write(uint8_t scene_id,
 
 void diskmenu_dbg(const char *str) {
     print_dbg(str);
+}
+
+int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
+
+    // The knob has a 12 bit range, and has a fair amount of jitter in the low
+    // bits.  Division into more than 64 zones becomes increasingly unstable.
+    //
+    // Intentional knob movement is detected by
+    // adc[1] >> 8 != last_knob >> 8
+    //
+    // Knob turns seem to be considered volatile, so to ensure that there is no
+    // jitter in the output for selection-style values, it can be desireable to
+    // have every other value in a selection-style param be a dead zone.
+    //
+    // ```
+    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
+    // uint8_t deadzone = value & 1;
+    // value >>= 1;
+    // if (deadzone || abs(value - last_value) < 2) {
+    //     return;
+    // }
+    // last_value = value;
+    // // now do stuff
+    // ```
+
+    static uint16_t last_knob = 0;
+
+    uint16_t adc[4];
+
+    adc_convert(&adc);
+
+    uint16_t value = adc[1] >> (12 - (1 + resolution));
+
+    uint16_t deadzone = value & 1;
+    value >>= 1;
+
+    if (deadzone || abs(value - last_knob) < 2) {
+        value = last_knob;
+    }
+    else {
+        last_knob = value;
+    }
+
+    // Now scale the value, which right now is at knob resolution.
+
+    value = value / ((1 << resolution) / scale);
+
+    if (scale - 1 < value) {
+        value = scale - 1;
+    }
+
+    return value;
 }
 

@@ -198,6 +198,18 @@ void diskmenu_flash_write(
                      char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]) {
 }
 
+extern int dm_lastPoll;
+
+int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
+    if (dm_lastPoll < 0) {
+        return 0;
+    }
+    if (scale <= dm_lastPoll) {
+        return scale - 1;
+    }
+    return dm_lastPoll;
+}
+
 void diskmenu_dbg(const char *str) {
     printf("dbg: %s\n", str);
 }

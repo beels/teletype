@@ -12,6 +12,7 @@
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 char scratch[1024];
+int dm_lastPoll = -1;
 extern char display_lines[8][43];
 void diskmenu_display_init(void);
 void diskmenu_display_print(void);
@@ -68,9 +69,11 @@ int main() {
     diskmenu_set_scratch_buffer(scratch, sizeof(scratch));
 
     diskmenu_init();
+    diskmenu_handle_PollADC();
 
     while (simulator_active) {
 
+        diskmenu_handle_PollADC();
         diskmenu_display_print();
 
         printf("> ");
@@ -104,7 +107,8 @@ int main() {
             case kParam:
                 {
                     //printf("param: %d\n", arg);
-                    diskmenu_handle_PollADC(arg);
+                    dm_lastPoll = arg;
+                    diskmenu_handle_PollADC();
                 } break;
             case kQuit:
                 {

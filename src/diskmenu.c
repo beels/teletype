@@ -22,8 +22,8 @@ static bool tele_usb_eof(void* self_data);
 static void main_menu_short_press(void);
 static void main_menu_button_timeout(void);
 static void main_menu_long_press(void);
-static void main_menu_handle_PollADC(int);
-static void disk_browse_handle_PollADC(int);
+static void main_menu_handle_PollADC(void);
+static void disk_browse_handle_PollADC(void);
 
 static void diskmenu_main_menu_init(void);
 static void diskmenu_finish(void);
@@ -42,6 +42,8 @@ static void diskmenu_browse_init(char *filename,
             // ARB: Need to audit and declare the disk_browse* functions.
 
 static bool diskmenu_discover_filenames(void);
+static void disk_browse_render_item(int index, int selection);
+static void disk_browse_render_page(int index);
 static void disk_browse_navigate(int old_index, int new_index);
 
 // ============================================================================
@@ -77,6 +79,7 @@ bool tele_usb_eof(void* self_data) {
 
 static int menu_selection = 4;
 static int param_knob_scaling = MAIN_MENU_PAGE_SIZE;
+static int param_last_index = -1;
 
 
             // ARB:
@@ -98,23 +101,22 @@ enum {
 };
 
 static void (*diskmenu_exit_handler)(void);
-static void (*pollADC_handler)(int);
+static void (*pollADC_handler)(void);
 static void (*short_press_action)(void);
 static void (*button_timeout_action)(void);
 static void (*long_press_action)(void);
 
 static uint8_t *s_file_index;
 static int disk_browse_num_files;
-static bool disk_browse_force_render;
 
 // ============================================================================
 //                              EVENT HANDLERS
 // ----------------------------------------------------------------------------
 
-static void main_menu_handle_PollADC(int index) {
-    static int last_index = -10 * MAIN_MENU_PAGE_SIZE;
+static void main_menu_handle_PollADC(void) {
+    int index = diskmenu_param_scaled(10, param_knob_scaling);
 
-    if (index != last_index) {
+    if (0 <= param_last_index && index != param_last_index) {
         if (index == kWriteNextInSeries && !nextname_buffer[0]) {
             return;
         }
@@ -127,31 +129,19 @@ static void main_menu_handle_PollADC(int index) {
                                        kCurrent);
 
         menu_selection = index;
-        last_index = index;
     }
+
+    param_last_index = index;
 }
 
-static void disk_browse_handle_PollADC(int index) {
-    static int last_index = -10 * DISK_BROWSE_PAGE_SIZE;
-
-    if (disk_browse_force_render || index != last_index) {
-        if (disk_browse_force_render) {
-            disk_browse_force_render = false;
-
-            // ARB: a kludge to trick disk_browse_navigate into thinking that
-            // we are on a new page.  Maybe just a flag would be more
-            // reasonable.
-
-            disk_browse_navigate(index + DISK_BROWSE_PAGE_SIZE, index);
-        }
-        else {
-            disk_browse_navigate(menu_selection, index);
-        }
-
-
+static void disk_browse_handle_PollADC(void) {
+    int index = diskmenu_param_scaled(10, param_knob_scaling);
+    if (0 <= param_last_index && index != param_last_index) {
+        disk_browse_navigate(menu_selection, index);
         menu_selection = index;
-        last_index = index;
     }
+
+    param_last_index = index;
 }
 
 static
@@ -236,14 +226,10 @@ void diskmenu_handle_button_timeout() {
     (*button_timeout_action)();
 }
 
-void diskmenu_handle_PollADC(int index) {
+void diskmenu_handle_PollADC() {
     if (pollADC_handler) {
-        (*pollADC_handler)(index);
+        (*pollADC_handler)();
     }
-}
-
-int diskmenu_param_scale() {
-    return param_knob_scaling;
 }
 
 void diskmenu_main_menu_init() {
@@ -253,6 +239,7 @@ void diskmenu_main_menu_init() {
     long_press_action = &main_menu_long_press;
     pollADC_handler = &main_menu_handle_PollADC;
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
+    param_last_index = -1;
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
@@ -310,8 +297,8 @@ void diskmenu_exec() {
         } break;
         case kBrowse: {
             diskmenu_browse_init(filename_buffer,
-                                      nextname_buffer,
-                                      preset);
+                                 nextname_buffer,
+                                 preset);
             return;
         } break;
         case kExit: {
@@ -608,6 +595,72 @@ static void disk_browse_finish(void) {
     diskmenu_main_menu_init();
 }
 
+static void disk_browse_render_item(int index, int selection) {
+    int page = index / DISK_BROWSE_PAGE_SIZE;
+    int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+    int current_entry = index - first_entry;
+
+    if (disk_browse_num_files <= index) {
+        diskmenu_display_line(current_entry + 1, NULL);
+        return;
+    }
+
+    char filename[FNAME_BUFFER_LEN];
+    disk_browse_read_sorted_filename(s_file_index,
+                                     filename,
+                                     FNAME_BUFFER_LEN,
+                                     index);
+    filename_ellipsis(filename, filename, 28);
+    diskmenu_render_line(filename,
+                         current_entry + 1,
+                         (index == selection) ? kCurrent
+                                              : kBlank);
+
+    if (index == selection) {
+        // Display title on line 0
+
+        diskmenu_display_clear(0, 0x2);
+
+        if (diskmenu_io_open(NULL, kModeR)) {
+            uint8_t title[DISPLAY_BUFFER_LEN];
+
+    // ARB: remove after refactor: too slow in loop.
+
+            // This works because we set the "current file" as a side effect of
+            // looking up the item's filename in
+            // `disk_browse_read_sorted_filename` above.
+
+            diskmenu_io_read_buf(title, DISPLAY_MAX_LEN);
+            title[DISPLAY_MAX_LEN] = 0;
+            diskmenu_io_close();
+            for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
+                if (title[j] == '\n') {
+                    title[j] = 0;
+                    break;
+                }
+                else if (title[j] < ' ' || '~' < title[j]) {
+                    title[j] = '.';
+                }
+            }
+
+            diskmenu_display_set(0, 0, (char *) title, 0xa, 0x2);
+        }
+        diskmenu_display_draw(0);
+    }
+}
+
+static void disk_browse_render_page(int index) {
+    int page = index / DISK_BROWSE_PAGE_SIZE;
+
+    // Render current page
+
+    int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+
+    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
+        disk_browse_render_item(i, index);
+    }
+}
+
 static void disk_browse_navigate(int old_index, int new_index) {
     int page = new_index / DISK_BROWSE_PAGE_SIZE;
     bool update_page = (page != old_index / DISK_BROWSE_PAGE_SIZE);
@@ -615,52 +668,10 @@ static void disk_browse_navigate(int old_index, int new_index) {
     // Render current page
 
     int first_entry = page * DISK_BROWSE_PAGE_SIZE;
-    int current_entry = new_index - first_entry;
-    int last_entry = old_index - first_entry;
 
-    for (int i = 0; i < DISK_BROWSE_PAGE_SIZE; ++i) {
-        if (disk_browse_num_files <= first_entry + i) {
-            diskmenu_display_line(i + 1, NULL);
-        }
-        else if (update_page || i == current_entry || i == last_entry) {
-            char filename[FNAME_BUFFER_LEN];
-            disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
-                                             FNAME_BUFFER_LEN,
-                                             first_entry + i);
-            filename_ellipsis(filename, filename, 28);
-            diskmenu_render_line(filename,
-                                      i + 1,
-                                      (i == current_entry) ? kCurrent
-                                                           : kBlank);
-
-            if (i == current_entry) {
-                // Display title on line 0
-
-                diskmenu_display_clear(0, 0x2);
-
-                if (diskmenu_io_open(NULL, kModeR)) {
-                    uint8_t title[DISPLAY_BUFFER_LEN];
-
-            // ARB: remove after refactor: too slow in loop.
-
-                    diskmenu_io_read_buf(title, DISPLAY_MAX_LEN);
-                    title[DISPLAY_MAX_LEN] = 0;
-                    diskmenu_io_close();
-                    for (int j = 0; j < DISPLAY_MAX_LEN; ++j) {
-                        if (title[j] == '\n') {
-                            title[j] = 0;
-                            break;
-                        }
-                        else if (title[j] < ' ' || '~' < title[j]) {
-                            title[j] = '.';
-                        }
-                    }
-
-                    diskmenu_display_set(0, 0, (char *) title, 0xa, 0x2);
-                }
-                diskmenu_display_draw(0);
-            }
+    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
+        if (update_page || i == new_index || i == old_index) {
+            disk_browse_render_item(i, new_index);
         }
     }
 }
@@ -703,6 +714,7 @@ static void diskmenu_browse_init(char *filename,
 
     diskmenu_filelist_init(&disk_browse_num_files);
     param_knob_scaling = disk_browse_num_files;
+    param_last_index = -1;
 
     // render browser
     char text_buffer[DISPLAY_BUFFER_LEN];
@@ -726,12 +738,7 @@ static void diskmenu_browse_init(char *filename,
               disk_browse_num_files, FNAME_BUFFER_LEN,
               &filename_accessor);
 
-
-            // ARB:
-            // We need a better way to trigger rendering here.
-            // - The last (unscaled?) value seen by pollADC should always be
-            //   available to the rest of the subsystem.
-
-    // Force rendering of current page.
-    disk_browse_force_render = true;
+    // Render current page.
+    menu_selection = diskmenu_param_scaled(10, param_knob_scaling);
+    disk_browse_render_page(menu_selection);
 }

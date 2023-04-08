@@ -27,8 +27,7 @@ void diskmenu_init(void);
 void diskmenu_handle_short_press(void);
 void diskmenu_handle_long_press(void);
 void diskmenu_handle_button_timeout(void);
-void diskmenu_handle_PollADC(int);
-int diskmenu_param_scale(void);
+void diskmenu_handle_PollADC(void);
 
 // ============================================================================
 //                           HARDWARE ABSTRACTION
@@ -74,5 +73,6 @@ void diskmenu_flash_write(
                      uint8_t scene_id,
                      scene_state_t *scene,
                      char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
+int diskmenu_param_scaled(uint8_t resolution, uint8_t scale);
 void diskmenu_dbg(const char *str);
 #endif
