@@ -790,10 +790,11 @@ bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
                 }
 #endif
                 *plun_state |= (1 << *plun);  // LUN test is done.
-                diskmenu_dbg("\r\nfail");
+                diskmenu_dbg("\r\ncreate fail");
                 return false;
             }
         }
+        diskmenu_dbg("\r\ncreate ok");
 
         if (!diskmenu_io_open(&status, kModeW)) {
 #if USB_DISK_TEST == 1
@@ -804,9 +805,10 @@ bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
             }
 #endif
             *plun_state |= (1 << *plun);  // LUN test is done.
-            diskmenu_dbg("\r\nfail");
+            diskmenu_dbg("\r\nopen fail");
             return false;
         }
+        diskmenu_dbg("\r\nopen ok");
 
         tt_serializer_t tele_usb_writer;
         tele_usb_writer.write_char = &tele_usb_putc;
@@ -827,6 +829,9 @@ bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
             filename[3]++;
 
         diskmenu_dbg(".");
+        if (SCENE_SLOTS - 1 == i) {
+            diskmenu_dbg("Done.");
+        }
     }
 
     diskmenu_filelist_close();
@@ -873,6 +878,10 @@ void tele_usb_disk_read_operation() {
                 diskmenu_io_close();
                 diskmenu_flash_write(i, &scene, &text);
             }
+        }
+        else {
+            diskmenu_dbg("\r\nnot found: ");
+            diskmenu_dbg(filename);
         }
 
         diskmenu_filelist_goto(NULL, 0, 0);
@@ -953,6 +962,11 @@ void handler_usb_PollADC(int32_t data) {
 }
 
 void handler_usb_Front(int32_t data) {
+    if (0 == data) {
+        // Exec only on button up.
+        return;
+    }
+
     // disable timers
     u8 flags = diskmenu_irqs_pause();
 

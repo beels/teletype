@@ -82,6 +82,7 @@ bool diskmenu_io_create(uint8_t *status, char *filename) {
 
 // filesystem navigation
 int files_index = 0;
+#if 0
 char files[12][40] = {
     "file one-001.txt",
     "file two-001.txt",
@@ -96,6 +97,22 @@ char files[12][40] = {
     "file eleven-001.txt",
     "file twelve-001.txt"
 };
+#else
+char files[12][40] = {
+    "tt00.txt",
+    "tt01.txt",
+    "tt02.txt",
+    "tt03.txt",
+    "tt04.txt",
+    "tt05.txt",
+    "tt06.txt",
+    "tt07.txt",
+    "tt08.txt",
+    "tt09.txt",
+    "tt10.txt",
+    "tt11.txt",
+};
+#endif
 
 bool diskmenu_device_open(void) {
     return true;
