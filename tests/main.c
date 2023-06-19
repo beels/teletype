@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include "drum_helpers_tests.h"
 #include "greatest/greatest.h"
 #include "match_token_tests.h"
 #include "op_mod_tests.h"
@@ -11,7 +12,6 @@
 #include "turtle_tests.h"
 #include "filename_tests.h"
 #include "mergesort_tests.h"
-#include "drum_helpers_tests.h"
 
 uint32_t tele_get_ticks() {
     return 0;
@@ -19,12 +19,19 @@ uint32_t tele_get_ticks() {
 void tele_metro_updated() {}
 void tele_metro_reset() {}
 void tele_tr(uint8_t i, int16_t v) {}
+void tele_tr_pulse(uint8_t i, int16_t time) {}
+void tele_tr_pulse_clear(uint8_t i) {}
+void tele_tr_pulse_time(uint8_t i, int16_t time) {}
 void tele_cv(uint8_t i, int16_t v, uint8_t s) {}
 void tele_cv_slew(uint8_t i, int16_t v) {}
+uint16_t tele_get_cv(uint8_t i) {
+    return 0;
+}
 void tele_update_adc(uint8_t force) {}
 void tele_has_delays(bool i) {}
 void tele_has_stack(bool i) {}
 void tele_cv_off(uint8_t i, int16_t v) {}
+void tele_cv_cal(uint8_t i, int32_t b, int32_t m) {}
 void tele_ii_tx(uint8_t addr, uint8_t *data, uint8_t l) {}
 void tele_ii_rx(uint8_t addr, uint8_t *data, uint8_t l) {}
 void tele_scene(uint8_t i, uint8_t init_grid, uint8_t init_pattern) {}

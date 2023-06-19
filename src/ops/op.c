@@ -85,7 +85,7 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_TR_POL, &op_TR_TIME, &op_TR_TOG, &op_TR_PULSE, &op_TR_P, &op_CV_SET,
     &op_MUTE, &op_STATE, &op_DEVICE_FLIP, &op_LIVE_OFF, &op_LIVE_O,
     &op_LIVE_DASH, &op_LIVE_D, &op_LIVE_GRID, &op_LIVE_G, &op_LIVE_VARS,
-    &op_LIVE_V, &op_PRINT, &op_PRT,
+    &op_LIVE_V, &op_PRINT, &op_PRT, &op_CV_GET, &op_CV_CAL, &op_CV_CAL_RESET,
 
     // maths
     &op_ADD, &op_SUB, &op_MUL, &op_DIV, &op_MOD, &op_RAND, &op_RND, &op_RRAND,
@@ -94,16 +94,16 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_AVG, &op_EQ, &op_NE, &op_LT, &op_GT, &op_LTE, &op_GTE, &op_INR,
     &op_OUTR, &op_INRI, &op_OUTRI, &op_NZ, &op_EZ, &op_RSH, &op_LSH, &op_LROT,
     &op_RROT, &op_EXP, &op_ABS, &op_SGN, &op_AND, &op_OR, &op_AND3, &op_OR3,
-    &op_AND4, &op_OR4, &op_JI, &op_SCALE, &op_SCL, &op_N, &op_VN, &op_HZ,
-    &op_N_S, &op_N_C, &op_N_CS, &op_N_B, &op_N_BX, &op_V, &op_VV, &op_ER,
-    &op_NR, &op_DR_T, &op_DR_P, &op_DR_V, &op_BPM, &op_BIT_OR, &op_BIT_AND,
-    &op_BIT_NOT, &op_BIT_XOR, &op_BSET, &op_BGET, &op_BCLR, &op_BTOG, &op_BREV,
-    &op_XOR, &op_CHAOS, &op_CHAOS_R, &op_CHAOS_ALG, &op_SYM_PLUS, &op_SYM_DASH,
-    &op_SYM_STAR, &op_SYM_FORWARD_SLASH, &op_SYM_PERCENTAGE, &op_SYM_EQUAL_x2,
-    &op_SYM_EXCLAMATION_EQUAL, &op_SYM_LEFT_ANGLED, &op_SYM_RIGHT_ANGLED,
-    &op_SYM_LEFT_ANGLED_EQUAL, &op_SYM_RIGHT_ANGLED_EQUAL,
-    &op_SYM_RIGHT_ANGLED_LEFT_ANGLED, &op_SYM_LEFT_ANGLED_RIGHT_ANGLED,
-    &op_SYM_RIGHT_ANGLED_EQUAL_LEFT_ANGLED,
+    &op_AND4, &op_OR4, &op_JI, &op_SCALE, &op_SCL, &op_SCALE0, &op_SCL0, &op_N,
+    &op_VN, &op_HZ, &op_N_S, &op_N_C, &op_N_CS, &op_N_B, &op_N_BX, &op_V,
+    &op_VV, &op_ER, &op_NR, &op_DR_T, &op_DR_P, &op_DR_V, &op_BPM, &op_BIT_OR,
+    &op_BIT_AND, &op_BIT_NOT, &op_BIT_XOR, &op_BSET, &op_BGET, &op_BCLR,
+    &op_BTOG, &op_BREV, &op_XOR, &op_CHAOS, &op_CHAOS_R, &op_CHAOS_ALG,
+    &op_SYM_PLUS, &op_SYM_DASH, &op_SYM_STAR, &op_SYM_FORWARD_SLASH,
+    &op_SYM_PERCENTAGE, &op_SYM_EQUAL_x2, &op_SYM_EXCLAMATION_EQUAL,
+    &op_SYM_LEFT_ANGLED, &op_SYM_RIGHT_ANGLED, &op_SYM_LEFT_ANGLED_EQUAL,
+    &op_SYM_RIGHT_ANGLED_EQUAL, &op_SYM_RIGHT_ANGLED_LEFT_ANGLED,
+    &op_SYM_LEFT_ANGLED_RIGHT_ANGLED, &op_SYM_RIGHT_ANGLED_EQUAL_LEFT_ANGLED,
     &op_SYM_LEFT_ANGLED_EQUAL_RIGHT_ANGLED, &op_SYM_EXCLAMATION,
     &op_SYM_LEFT_ANGLED_x2, &op_SYM_RIGHT_ANGLED_x2, &op_SYM_LEFT_ANGLED_x3,
     &op_SYM_RIGHT_ANGLED_x3, &op_SYM_AMPERSAND_x2, &op_SYM_PIPE_x2,
@@ -116,6 +116,9 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     // controlflow
     &op_SCRIPT, &op_SYM_DOLLAR, &op_SCRIPT_POL, &op_SYM_DOLLAR_POL, &op_KILL,
     &op_SCENE, &op_SCENE_G, &op_SCENE_P, &op_BREAK, &op_BRK, &op_SYNC,
+    &op_SYM_DOLLAR_F, &op_SYM_DOLLAR_F1, &op_SYM_DOLLAR_F2, &op_SYM_DOLLAR_L,
+    &op_SYM_DOLLAR_L1, &op_SYM_DOLLAR_L2, &op_SYM_DOLLAR_S, &op_SYM_DOLLAR_S1,
+    &op_SYM_DOLLAR_S2, &op_I1, &op_I2, &op_FR,
 
     // delay
     &op_DEL_CLR,
@@ -304,7 +307,9 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_I2M_B_R, &op_I2M_B_L, &op_I2M_B_START, &op_I2M_B_END, &op_I2M_B_DIR,
     &op_I2M_B_SPE, &op_I2M_B_FB, &op_I2M_B_NSHIFT, &op_I2M_B_VSHIFT,
     &op_I2M_B_TSHIFT, &op_I2M_B_NOFF, &op_I2M_B_VOFF, &op_I2M_B_TOFF,
-    &op_I2M_B_CLR, &op_I2M_B_MODE, &op_I2M_C_QN, &op_I2M_C_QV, &op_I2M_TEST,
+    &op_I2M_B_CLR, &op_I2M_B_MODE, &op_I2M_C_QN, &op_I2M_C_QV, &op_I2M_MUTE,
+    &op_I2M_MUTE_POUND, &op_I2M_SOLO, &op_I2M_SOLO_POUND, &op_I2M_TEST,
+
 
     // seed
     &op_SEED, &op_RAND_SEED, &op_SYM_RAND_SD, &op_SYM_R_SD, &op_TOSS_SEED,

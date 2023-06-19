@@ -120,7 +120,7 @@ const char* help2[HELP2_LENGTH] = { "2/17 VARIABLES",
                                     "PRINT X",
                                     "    GET/PRINT VALUE" };
 
-#define HELP3_LENGTH 61
+#define HELP3_LENGTH 78
 const char* help3[HELP3_LENGTH] = { "3/17 PARAMETERS",
                                     " ",
                                     "TR A-D|SET TR VALUE (0,1)",
@@ -128,7 +128,12 @@ const char* help3[HELP3_LENGTH] = { "3/17 PARAMETERS",
                                     "CV 1-4|CV TARGET VALUE",
                                     "CV.SLEW 1-4|CV SLEW TIME (MS)",
                                     "CV.SET 1-4|SET CV (NO SLEW)",
+                                    "CV.GET 1-4|GET CURRENT CV",
                                     "CV.OFF 1-4|ADD CV OFFSET",
+                                    "CV.CAL 1-4 MV1V MV3V",
+                                    "    CALIBRATE CV OUTPUT",
+                                    "CV.CAL.RESET 1-4",
+                                    "    RESET CV OUT CALIBRATION",
                                     " ",
                                     "IN|GET IN JACK VAL",
                                     "IN.SCALE X Y",
@@ -161,6 +166,18 @@ const char* help3[HELP3_LENGTH] = { "3/17 PARAMETERS",
                                     "SCRIPT.POL",
                                     "   GET/SET ACTIVE SCRIPT EDGES",
                                     "   1 RISING, 2 FALLING, 3 BOTH",
+                                    "$F RUN SCRIPT AS FUNCTION",
+                                    "$F1 -\"- WITH 1 PARAM",
+                                    "$F2 -\" WITH 2 PARAMS",
+                                    "$L RUN SCRIPT LINE",
+                                    "$L1 -\"- WITH 1 PARAM",
+                                    "$L2 -\"- WITH 2 PARAMS",
+                                    "$S RUN SELF'S LINE",
+                                    "$S1 -\"- WITH 1 PARAM",
+                                    "$S2 -\"- WITH 2 PARAMS",
+                                    "I1 GET 1ST PARAM",
+                                    "I2 GET 2ND PARAM",
+                                    "FR SET FUNCTION RETURN",
                                     "SCENE|GET/SET SCENE #",
                                     "SCENE.G|SET SCENE, EXCL GRID",
                                     "SCENE.P|SET SCENE, EXCL PATTERN",
@@ -281,7 +298,7 @@ const char* help4[HELP4_LENGTH] = { "4/17 DATA AND TABLES",
                                     "   S = STEP (0-15)"                                     
                                     };
 
-#define HELP5_LENGTH 128
+#define HELP5_LENGTH 130
 const char* help5[HELP5_LENGTH] = { "5/17 OPERATORS",
                                     " ",
                                     "RAND A|RANDOM 0 - A",
@@ -341,6 +358,8 @@ const char* help5[HELP5_LENGTH] = { "5/17 OPERATORS",
                                     "WRAP A B C|WRAP A AROUND B-C",
                                     "SCALE A B X Y I",
                                     "    SCALE I FROM A..B TO X..Y",
+                                    "SCALE0 A B I",
+                                    "    SCALE I FROM 0..A TO 0..B",
                                     "QT A B|QUANTIZE A TO B*X",
                                     "QT.S X R S|QUANTIZE TO SCALE",
                                     "   X = INPUT *",
@@ -1396,7 +1415,7 @@ const char* help16[HELP16_LENGTH] = { "16/17 DISTING EX",
                                       "EX.SAVE2 x",
                                       "    SAVE RIGHT PRESET"};
 
-#define HELP17_LENGTH 192
+#define HELP17_LENGTH 198
 const char* help17[HELP17_LENGTH] = { "17/17 I2C2MIDI",
                                       " ",
                                       "I2M.CH x",
@@ -1422,6 +1441,12 @@ const char* help17[HELP17_LENGTH] = { "17/17 I2C2MIDI",
                                       "I2M.RAT x",
                                       "I2M.RAT# ch x",
                                       "    GET/SET NOTE RATCHETING",
+                                      "I2M.MUTE x",
+                                      "I2M.MUTE# ch x",
+                                      "    GET/SET CHANNEL MUTE",
+                                      "I2M.SOLO x",
+                                      "I2M.SOLO# ch x",
+                                      "    GET/SET CHANNEL SOLO",
                                       " ",
                                       "I2M.NOTE x y",
                                       "I2M.N x y",
@@ -1690,18 +1715,14 @@ void process_help_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_ctrl(m, k, HID_F) || match_ctrl(m, k, HID_S)) {
         search_result = SEARCH_RESULT_NONE;
         if (search_mode == SEARCH_MODE_FWD) { search_mode = SEARCH_MODE_NONE; }
-        else {
-            search_mode = SEARCH_MODE_FWD;
-        }
+        else { search_mode = SEARCH_MODE_FWD; }
         dirty = true;
     }
     // C-r: search in reverse
     else if (match_ctrl(m, k, HID_R)) {
         search_result = SEARCH_RESULT_NONE;
         if (search_mode == SEARCH_MODE_REV) { search_mode = SEARCH_MODE_NONE; }
-        else {
-            search_mode = SEARCH_MODE_REV;
-        }
+        else { search_mode = SEARCH_MODE_REV; }
         dirty = true;
     }
     else if (search_mode != SEARCH_MODE_NONE) {

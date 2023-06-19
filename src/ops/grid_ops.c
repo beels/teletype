@@ -1,4 +1,5 @@
 #include "ops/grid_ops.h"
+
 #include "helpers.h"
 #include "teletype.h"
 #include "teletype_io.h"
@@ -387,7 +388,7 @@ static void op_G_GRP_SC_set(const void *NOTUSED(data), scene_state_t *ss,
     s16 script = cs_pop(cs) - 1;
 
     if (group < (s16)0 || group >= (s16)GRID_GROUP_COUNT) return;
-    if (script < 0 || script > INIT_SCRIPT) script = -1;
+    if (script < 0 || script >= EDITABLE_SCRIPT_COUNT) script = -1;
 
     SG.group[group].script = script;
 }
@@ -746,15 +747,18 @@ static void op_G_BTN_PR_get(const void *NOTUSED(data), scene_state_t *ss,
 
     if (GBC.script != -1) {
         es_push(es);
-        if (!es->overflow) run_script_with_exec_state(ss, es, GBC.script);
-        es_pop(es);
+        if (!es->overflow) {
+            run_script_with_exec_state(ss, es, GBC.script);
+            es_pop(es);
+        }
     }
 
     if (SG.group[GBC.group].script != -1) {
         es_push(es);
-        if (!es->overflow)
+        if (!es->overflow) {
             run_script_with_exec_state(ss, es, SG.group[GBC.group].script);
-        es_pop(es);
+            es_pop(es);
+        }
     }
 
     SG.scr_dirty = SG.grid_dirty = 1;
@@ -1298,15 +1302,18 @@ static void op_G_FDR_PR_get(const void *NOTUSED(data), scene_state_t *ss,
 
     if (GFC.script != -1) {
         es_push(es);
-        if (!es->overflow) run_script_with_exec_state(ss, es, GFC.script);
-        es_pop(es);
+        if (!es->overflow) {
+            run_script_with_exec_state(ss, es, GFC.script);
+            es_pop(es);
+        }
     }
 
     if (SG.group[GFC.group].script != -1) {
         es_push(es);
-        if (!es->overflow)
+        if (!es->overflow) {
             run_script_with_exec_state(ss, es, SG.group[GFC.group].script);
-        es_pop(es);
+            es_pop(es);
+        }
     }
 
     SG.scr_dirty = SG.grid_dirty = 1;
@@ -1493,7 +1500,7 @@ static void grid_init_button(scene_state_t *ss, s16 group, s16 i, s16 x, s16 y,
     else if (level > (s16)15)
         level = 15;
 
-    if (script < 0 || script > INIT_SCRIPT) script = -1;
+    if (script < 0 || script >= EDITABLE_SCRIPT_COUNT) script = -1;
 
     GBC.enabled = true;
     GBC.group = group;
@@ -1530,7 +1537,7 @@ static void grid_init_fader(scene_state_t *ss, s16 group, s16 i, s16 x, s16 y,
 
     level = grid_fader_clamp_level(level, type, w, h);
 
-    if (script < 0 || script > INIT_SCRIPT) script = -1;
+    if (script < 0 || script >= EDITABLE_SCRIPT_COUNT) script = -1;
 
     GFC.enabled = true;
     GFC.group = group;

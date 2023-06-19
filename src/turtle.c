@@ -4,19 +4,21 @@
 #define max(X, Y) ((X) > (Y) ? (X) : (Y))
 
 void turtle_init(scene_turtle_t *st) {
-    scene_turtle_t t = {.fence = {.x1 = 0, .y1 = 0, .x2 = 3, .y2 = 63 },
-                        .mode = TURTLE_BUMP,
-                        .heading = 180,
-                        .speed = 100,
-                        .stepped = false,
-                        .script_number = TEMP_SCRIPT };
+    scene_turtle_t t = { .fence = { .x1 = 0, .y1 = 0, .x2 = 3, .y2 = 63 },
+                         .mode = TURTLE_BUMP,
+                         .heading = 180,
+                         .speed = 100,
+                         .stepped = false,
+                         .script_number = NO_SCRIPT };
     memcpy(st, &t, sizeof(t));
     turtle_set_x(st, 0);
     turtle_set_y(st, 0);
     st->last = st->position;
 }
 
-typedef struct { QT x1, y1, x2, y2; } Q_fence_t;
+typedef struct {
+    QT x1, y1, x2, y2;
+} Q_fence_t;
 
 static inline Q_fence_t normalize_fence(turtle_fence_t in, turtle_mode_t mode) {
     Q_fence_t out;
@@ -255,15 +257,15 @@ void turtle_set_speed(scene_turtle_t *st, int16_t v) {
     st->speed = v;
 }
 
-void turtle_set_script(scene_turtle_t *st, script_number_t sn) {
-    if (sn >= METRO_SCRIPT)
-        st->script_number = TEMP_SCRIPT;
+void turtle_set_script(scene_turtle_t *st, uint8_t sn) {
+    if (sn >= EDITABLE_SCRIPT_COUNT)
+        st->script_number = NO_SCRIPT;
     else
         st->script_number = sn;
     st->stepped = false;
 }
 
-script_number_t turtle_get_script(scene_turtle_t *st) {
+uint8_t turtle_get_script(scene_turtle_t *st) {
     return st->script_number;
 }
 

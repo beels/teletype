@@ -1,6 +1,6 @@
 # Changelog
 
-## v4.0.x
+## v5.0.0
 
 - **FIX**: fix off-by-one error in `P.ROT` understanding of pattern length
 - **FIX**: fix `CROW.Q3` calls `ii.self.query2` instead of `ii.self.query3`
@@ -19,6 +19,15 @@
 - **FIX**: fixes a transcription error  in the SD drum helper patterns
 - **NEW**: Ten new patterns for `DR.V` and optimised old patterns
 - **FIX**: fix BPM rounding error
+- **FIX**: support all line ending types for USB load
+- **FIX**: fix `STATE` not accounting for `DEVICE.FLIP`
+- **FIX**: fix MIDI IN ops channel number being off by 1
+- **FIX**: improve `TR.P` accuracy
+- **FIX**: fix `KILL` not stopping TR pulses in progress
+- **NEW**: new op: `SCALE0` / `SCL0`
+- **NEW**: new ops: `$F`, `$F1`, `$F2`, `$L`, `$L1`, `$L2`, `$S`, `$S1`, `$S2`, `I1`, `I2`, `FR`
+- **NEW**: new op: `CV.GET`
+- **NEW**: new ops: `CV.CAL` and `CV.CAL.RESET` to calibrate CV outputs
 
 ## v4.0.0
 

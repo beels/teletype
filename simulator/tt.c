@@ -30,6 +30,21 @@ void tele_tr(uint8_t i, int16_t v) {
     printf("\n");
 }
 
+void tele_tr_pulse(uint8_t i, int16_t time) {
+    printf("TR PULSE i:%" PRIu8 " time:%" PRId16, i, time);
+    printf("\n");
+}
+
+void tele_tr_pulse_clear(uint8_t i) {
+    printf("TR PULSE CLEAR i:%" PRIu8, i);
+    printf("\n");
+}
+
+void tele_tr_pulse_time(uint8_t i, int16_t time) {
+    printf("TR PULSE TIME i:%" PRIu8 " time:%" PRId16, i, time);
+    printf("\n");
+}
+
 void tele_cv(uint8_t i, int16_t v, uint8_t s) {
     printf("CV  i:%" PRIu8 " v:%" PRId16 " s:%" PRIu8, i, v, s);
     printf("\n");
@@ -38,6 +53,12 @@ void tele_cv(uint8_t i, int16_t v, uint8_t s) {
 void tele_cv_slew(uint8_t i, int16_t v) {
     printf("CV_SLEW  i:%" PRIu8 " v:%" PRId16, i, v);
     printf("\n");
+}
+
+uint16_t tele_get_cv(uint8_t i) {
+    printf("CV_GET  i:%" PRIu8, i);
+    printf("\n");
+    return 0;
 }
 
 void tele_update_adc(uint8_t force) {
@@ -57,6 +78,11 @@ void tele_has_stack(bool i) {
 
 void tele_cv_off(uint8_t i, int16_t v) {
     printf("CV_OFF  i:%" PRIu8 " v:%" PRId16, i, v);
+    printf("\n");
+}
+
+void tele_cv_cal(uint8_t i, int32_t b, int32_t m) {
+    printf("CV_CAL  i:%" PRIu8 " b:%" PRId32 " m:%" PRId32, i, b, m);
     printf("\n");
 }
 

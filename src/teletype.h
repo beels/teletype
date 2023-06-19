@@ -40,13 +40,21 @@ error_t validate(const tele_command_t *c,
 process_result_t run_script(scene_state_t *ss, size_t script_no);
 process_result_t run_script_with_exec_state(scene_state_t *ss, exec_state_t *es,
                                             size_t script_no);
-process_result_t run_command(scene_state_t *ss, const tele_command_t *cmd);
+process_result_t run_line_with_exec_state(scene_state_t *ss, exec_state_t *es,
+                                          size_t script_no, uint8_t line_no);
+process_result_t run_fscript_with_exec_state(scene_state_t *ss,
+                                             exec_state_t *es,
+                                             size_t script_no);
+process_result_t run_fline_with_exec_state(scene_state_t *ss, exec_state_t *es,
+                                           size_t script_no, uint8_t line_no);
 process_result_t process_command(scene_state_t *ss, exec_state_t *es,
                                  const tele_command_t *cmd);
 
 void tele_tick(scene_state_t *ss, uint8_t);
 
 void clear_delays(scene_state_t *ss);
+
+void tele_tr_pulse_end(scene_state_t *ss, uint8_t i);
 
 const char *tele_error(error_t);
 

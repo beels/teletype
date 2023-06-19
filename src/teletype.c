@@ -1,3 +1,5 @@
+#include "teletype.h"
+
 #include <stdint.h>  // types
 #include <stdio.h>   // printf
 #include <string.h>
@@ -7,7 +9,6 @@
 #include "ops/op.h"
 #include "scanner.h"
 #include "table.h"
-#include "teletype.h"
 #include "teletype_io.h"
 #include "util.h"
 
@@ -18,7 +19,10 @@ bool processing_delays = false;
 // DELAY ////////////////////////////////////////////////////////
 
 void clear_delays(scene_state_t *ss) {
-    for (int16_t i = 0; i < TR_COUNT; i++) { ss->tr_pulse_timer[i] = 0; }
+    for (int16_t i = 0; i < TR_COUNT; i++) {
+        tele_tr_pulse_clear(i);
+        tele_tr_pulse_end(ss, i);
+    }
 
     for (int16_t i = 0; i < DELAY_SIZE; i++) { ss->delay.time[i] = 0; }
 
@@ -145,16 +149,21 @@ process_result_t run_script(scene_state_t *ss, size_t script_no) {
 
 // Everything needs to call this to execute code.  An execution
 // context is required for proper operation of DEL, THIS, L, W, IF
-process_result_t run_script_with_exec_state(scene_state_t *ss, exec_state_t *es,
-                                            size_t script_no) {
+static process_result_t _run_script_with_exec_state(scene_state_t *ss,
+                                                    exec_state_t *es,
+                                                    size_t script_no,
+                                                    uint8_t line_no1,
+                                                    uint8_t line_no2) {
 #ifdef TELETYPE_PROFILE
     tele_profile_script(script_no);
 #endif
-    process_result_t result = {.has_value = false, .value = 0 };
+    process_result_t result = { .has_value = false, .value = 0 };
 
     es_set_script_number(es, script_no);
 
-    for (size_t i = 0; i < ss_get_script_len(ss, script_no); i++) {
+    for (size_t i = line_no1; i <= line_no2; i++) {
+        if (i >= ss_get_script_len(ss, script_no)) break;
+
         es_set_line_number(es, i);
 
         // Commented code doesn't run.
@@ -180,23 +189,39 @@ process_result_t run_script_with_exec_state(scene_state_t *ss, exec_state_t *es,
     return result;
 }
 
-// Only the test framework should call this, and it needs to follow up its
-// es_init() with an es_push().
-// es_variables()->script_number should be set to test SCRIPT
-process_result_t run_command(scene_state_t *ss, const tele_command_t *cmd) {
-    exec_state_t es;
-    process_result_t o;
-    es_init(&es);
-    es_push(&es);
-    // the lack of a script number here is a bug, so if you use this code,
-    // something needs to set the script number
-    // es_variables(es)->script_number =
-    do {
-        o = process_command(ss, &es, cmd);
-    } while (es_variables(&es)->while_continue && !es_variables(&es)->breaking);
-    return o;
+process_result_t run_script_with_exec_state(scene_state_t *ss, exec_state_t *es,
+                                            size_t script_no) {
+    return _run_script_with_exec_state(ss, es, script_no, 0,
+                                       SCRIPT_MAX_COMMANDS - 1);
 }
 
+process_result_t run_line_with_exec_state(scene_state_t *ss, exec_state_t *es,
+                                          size_t script_no, uint8_t line_no) {
+    return _run_script_with_exec_state(ss, es, script_no, line_no, line_no);
+}
+
+process_result_t run_fscript_with_exec_state(scene_state_t *ss,
+                                             exec_state_t *es,
+                                             size_t script_no) {
+    process_result_t output = _run_script_with_exec_state(
+        ss, es, script_no, 0, SCRIPT_MAX_COMMANDS - 1);
+    if (es_variables(es)->fresult_set) {
+        output.value = es_variables(es)->fresult;
+        output.has_value = true;
+    }
+    return output;
+}
+
+process_result_t run_fline_with_exec_state(scene_state_t *ss, exec_state_t *es,
+                                           size_t script_no, uint8_t line_no) {
+    process_result_t output =
+        _run_script_with_exec_state(ss, es, script_no, line_no, line_no);
+    if (es_variables(es)->fresult_set) {
+        output.value = es_variables(es)->fresult;
+        output.has_value = true;
+    }
+    return output;
+}
 
 /////////////////////////////////////////////////////////////////
 // PROCESS //////////////////////////////////////////////////////
@@ -294,11 +319,11 @@ process_result_t process_command(scene_state_t *ss, exec_state_t *es,
     // ---------
     // sometimes we have single value left of the stack, if so return it
     if (cs_stack_size(&cs)) {
-        process_result_t o = {.has_value = true, .value = cs_pop(&cs) };
+        process_result_t o = { .has_value = true, .value = cs_pop(&cs) };
         return o;
     }
     else {
-        process_result_t o = {.has_value = false, .value = 0 };
+        process_result_t o = { .has_value = false, .value = 0 };
         return o;
     }
 }
@@ -310,7 +335,7 @@ process_result_t process_command(scene_state_t *ss, exec_state_t *es,
 void tele_tick(scene_state_t *ss, uint8_t time) {
     // could be a while() if there is reason to expect a user to cascade moves
     // with SCRIPTs without the tick delay
-    if (ss->turtle.stepped && ss->turtle.script_number != TEMP_SCRIPT) {
+    if (ss->turtle.stepped && ss->turtle.script_number != NO_SCRIPT) {
         ss->turtle.stepped = false;
         run_script(ss, turtle_get_script(&ss->turtle));
     }
@@ -333,8 +358,8 @@ void tele_tick(scene_state_t *ss, uint8_t time) {
                 // to execute it.  This is required for THIS to be tracked, as
                 // it needs to have a script number.
                 // TODO: dynamically allocate scripts to prevent waste
-                ss_clear_script(ss, TEMP_SCRIPT);
-                ss_overwrite_script_command(ss, TEMP_SCRIPT, 0,
+                ss_clear_script(ss, DELAY_SCRIPT);
+                ss_overwrite_script_command(ss, DELAY_SCRIPT, 0,
                                             &ss->delay.commands[i]);
 
                 // We always need to execute from within an execution context
@@ -351,7 +376,7 @@ void tele_tick(scene_state_t *ss, uint8_t time) {
                 es_variables(&es)->script_number = ss->delay.origin_script[i];
                 es_variables(&es)->i = ss->delay.origin_i[i];
 
-                run_script_with_exec_state(ss, &es, TEMP_SCRIPT);
+                run_script_with_exec_state(ss, &es, DELAY_SCRIPT);
 
                 ss->delay.time[i] = 0;
                 ss->delay.count--;
@@ -362,25 +387,11 @@ void tele_tick(scene_state_t *ss, uint8_t time) {
             }
         }
     }
+}
 
-    // process tr pulses
-    for (int16_t i = 0; i < TR_COUNT; i++) {
-        if (ss->tr_pulse_timer[i]) {
-            // prevent tr_pulse_timer from being greater than tr_time
-            int16_t tr_time = ss->variables.tr_time[i];
-            if (tr_time < 0) tr_time = 0;
-            if (ss->tr_pulse_timer[i] > tr_time)
-                ss->tr_pulse_timer[i] = tr_time;
-
-            ss->tr_pulse_timer[i] -= time;
-
-            if (ss->tr_pulse_timer[i] <= 0) {
-                ss->tr_pulse_timer[i] = 0;
-                ss->variables.tr[i] = ss->variables.tr_pol[i] == 0;
-                tele_tr(i, ss->variables.tr[i]);
-            }
-        }
-    }
+void tele_tr_pulse_end(scene_state_t *ss, uint8_t i) {
+    ss->variables.tr[i] = ss->variables.tr_pol[i] == 0;
+    tele_tr(i, ss->variables.tr[i]);
 }
 
 /////////////////////////////////////////////////////////////////

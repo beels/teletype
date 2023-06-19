@@ -5,17 +5,16 @@
 #include <unistd.h>  // ssize_t
 
 #include "greatest/greatest.h"
-
 #include "teletype.h"
 // runs multiple lines of commands and then asserts that the final answer is
 // correct (allows contiuation of state)
 TEST process_helper_state(scene_state_t* ss, size_t n, char* lines[],
                           int16_t answer) {
-    process_result_t result = {.has_value = false, .value = 0 };
+    process_result_t result = { .has_value = false, .value = 0 };
     exec_state_t es;
     es_init(&es);
     es_push(&es);
-    es_variables(&es)->script_number = 1;
+    es_variables(&es)->script_number = 0;
     for (size_t i = 0; i < n; i++) {
         tele_command_t cmd;
         char error_msg[TELE_ERROR_MSG_LENGTH];
@@ -287,7 +286,7 @@ TEST test_blank_command() {
     exec_state_t es;
     es_init(&es);
     es_push(&es);
-    es_variables(&es)->script_number = 1;
+    es_variables(&es)->script_number = 0;
     tele_command_t cmd;
     char error_msg[TELE_ERROR_MSG_LENGTH];
 
@@ -308,7 +307,7 @@ TEST test_P_ROT_1() {
     scene_state_t ss;
     ss_init(&ss);
 
-    char* prep1[3] = { "P.START 0", "P.END 3", "0"};
+    char* prep1[3] = { "P.START 0", "P.END 3", "0" };
     CHECK_CALL(process_helper_state(&ss, 3, prep1, 0));
 
     char* prep2[5] = { "P 0 1", "P 1 2", "P 2 3", "P 3 4", "P P.END" };
@@ -336,7 +335,7 @@ TEST test_P_ROT_3() {
     scene_state_t ss;
     ss_init(&ss);
 
-    char* prep1[3] = { "P.START 0", "P.END 3", "0"};
+    char* prep1[3] = { "P.START 0", "P.END 3", "0" };
     CHECK_CALL(process_helper_state(&ss, 3, prep1, 0));
 
     char* prep2[5] = { "P 0 1", "P 1 2", "P 2 3", "P 3 4", "P P.END" };

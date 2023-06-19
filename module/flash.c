@@ -22,7 +22,7 @@ static grid_data_t grid_data;
 
 // NVRAM data structure located in the flash array.
 typedef const struct {
-    scene_script_t scripts[SCRIPT_COUNT - 1];  // Exclude TEMP script
+    scene_script_t scripts[EDITABLE_SCRIPT_COUNT];
     scene_pattern_t patterns[PATTERN_COUNT];
     grid_data_t grid_data;
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
@@ -53,7 +53,7 @@ void flash_prepare() {
         int confirm = 1;
         uint32_t counter = 0;
         int toggle = 0;
-#define TIMEOUT 50000
+#define TIMEOUT 100000
         while (confirm == 1 && (++counter < TIMEOUT)) {
             confirm = gpio_get_pin_value(NMI);
             if ((counter % 1000) == 0) {
@@ -82,9 +82,11 @@ void flash_prepare() {
             flash_write(i, &scene, &text);
         }
 
+        cal_data_t blank_cal_data;
+        init_cal_data(&blank_cal_data);
         flashc_memcpy((void *)&f.cal, &blank_cal_data, sizeof(blank_cal_data),
                       true);
-        device_config_t device_config = {.flip = 0 };
+        device_config_t device_config = { .flip = 0 };
         flashc_memcpy((void *)&f.device_config, &device_config,
                       sizeof(device_config), true);
         flash_update_last_saved_scene(0);
@@ -97,8 +99,7 @@ void flash_write(uint8_t preset_no, scene_state_t *scene,
                  char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]) {
     if (preset_no >= SCENE_SLOTS) return;
     flashc_memcpy((void *)&f.scenes[preset_no].scripts, ss_scripts_ptr(scene),
-                  // Exclude TEMP script from flash storage by subtracting one
-                  ss_scripts_size() - sizeof(scene_script_t), true);
+                  ss_scripts_size(EDITABLE_SCRIPT_COUNT), true);
     flashc_memcpy((void *)&f.scenes[preset_no].patterns, ss_patterns_ptr(scene),
                   ss_patterns_size(), true);
     pack_grid(scene);
@@ -114,8 +115,7 @@ void flash_read(uint8_t preset_no, scene_state_t *scene,
                 uint8_t init_i2c_op_address) {
     if (preset_no >= SCENE_SLOTS) return;
     memcpy(ss_scripts_ptr(scene), &f.scenes[preset_no].scripts,
-           // Exclude size of TEMP script as above
-           ss_scripts_size() - sizeof(scene_script_t));
+           ss_scripts_size(EDITABLE_SCRIPT_COUNT));
     if (init_pattern) {
         memcpy(ss_patterns_ptr(scene), &f.scenes[preset_no].patterns,
                ss_patterns_size());
@@ -128,7 +128,7 @@ void flash_read(uint8_t preset_no, scene_state_t *scene,
            SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
     // need to reset timestamps
     uint32_t ticks = get_ticks();
-    for (size_t i = 0; i < TEMP_SCRIPT; i++)
+    for (size_t i = 0; i < TOTAL_SCRIPT_COUNT; i++)
         scene->scripts[i].last_time = ticks;
     scene->variables.time = 0;
 

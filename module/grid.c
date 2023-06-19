@@ -1,4 +1,5 @@
 #include "grid.h"
+
 #include "edit_mode.h"
 #include "flash.h"
 #include "font.h"
@@ -223,12 +224,8 @@ void grid_set_control_mode(u8 control, u8 mode, scene_state_t *ss) {
         tt_mode = G_EDIT;
         tt_script = get_edit_script();
     }
-    else if (mode == M_PATTERN) {
-        tt_mode = G_TRACKER;
-    }
-    else if (mode == M_PRESET_W || mode == M_PRESET_R) {
-        tt_mode = G_PRESET;
-    }
+    else if (mode == M_PATTERN) { tt_mode = G_TRACKER; }
+    else if (mode == M_PRESET_W || mode == M_PRESET_R) { tt_mode = G_PRESET; }
     control_mode_on = control;
     grid_clear_held_keys();
     ss->grid.grid_dirty = 1;
@@ -353,9 +350,9 @@ void grid_control_refresh(scene_state_t *ss) {
 
     // mode selection
     monomeLedBuffer[d] =
-        tt_mode == G_EDIT && tt_script == 8 ? mode_on : mode_off;
+        tt_mode == G_EDIT && tt_script == METRO_SCRIPT ? mode_on : mode_off;
     monomeLedBuffer[d + 1] =
-        tt_mode == G_EDIT && tt_script == 9 ? mode_on : mode_off;
+        tt_mode == G_EDIT && tt_script == INIT_SCRIPT ? mode_on : mode_off;
     monomeLedBuffer[d + 3] =
         tt_mode == G_LIVE_V || tt_mode == G_LIVE_D ? mode_on : mode_off;
     monomeLedBuffer[d + 4] =
@@ -508,9 +505,7 @@ static void restore_last_mode(scene_state_t *ss) {
         set_edit_mode_script(tt_script);
         set_mode(M_EDIT);
     }
-    else if (tt_mode == G_PRESET) {
-        set_mode(M_PRESET_R);
-    }
+    else if (tt_mode == G_PRESET) { set_mode(M_PRESET_R); }
     else if (tt_mode == G_LIVE_V) {
         set_mode(M_LIVE);
         set_live_submode(SUB_MODE_VARS);
@@ -577,9 +572,7 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
                         tracker_last = value;
                         value = 0;
                     }
-                    else {
-                        value = tracker_last ? tracker_last : 1;
-                    }
+                    else { value = tracker_last ? tracker_last : 1; }
                     ss_set_pattern_val(ss, tracker_x - 2, tracker_y + offset,
                                        value);
                 }
@@ -742,9 +735,15 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
 
         switch (x) {
             case 0:
+                tt_mode = G_EDIT;
+                tt_script = METRO_SCRIPT;
+                set_edit_mode_script(tt_script);
+                set_mode(M_EDIT);
+                ss->grid.grid_dirty = 1;
+                break;
             case 1:
                 tt_mode = G_EDIT;
-                tt_script = x + 8;
+                tt_script = INIT_SCRIPT;
                 set_edit_mode_script(tt_script);
                 set_mode(M_EDIT);
                 ss->grid.grid_dirty = 1;
@@ -885,9 +884,7 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
                     variable_last = v[ve];
                     v[ve] = 0;
                 }
-                else {
-                    v[ve] = variable_last ? variable_last : 1;
-                }
+                else { v[ve] = variable_last ? variable_last : 1; }
             }
             variable_edit = 0;
             set_vars_updated();
@@ -944,16 +941,27 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
         return 1;
     }
 
-    // trigger metro/init
-    if (y == 4 && x < 2 && z) {
-        x += 8;
-        script_triggers[x].on = 1;
-        script_triggers[x].ss = ss;
-        timer_remove(&script_triggers[x].timer);
-        timer_add(&script_triggers[x].timer, GRID_SCRIPT_TRIGGER,
-                  &script_triggers_callback, (void *)&script_triggers[x]);
+    // trigger metro
+    if (y == 4 && x == 0 && z) {
+        script_triggers[8].on = 1;
+        script_triggers[8].ss = ss;
+        timer_remove(&script_triggers[8].timer);
+        timer_add(&script_triggers[8].timer, GRID_SCRIPT_TRIGGER,
+                  &script_triggers_callback, (void *)&script_triggers[8]);
         ss->grid.grid_dirty = 1;
-        run_script(ss, x);
+        run_script(ss, METRO_SCRIPT);
+        return 1;
+    }
+
+    // trigger init
+    if (y == 4 && x == 1 && z) {
+        script_triggers[9].on = 1;
+        script_triggers[9].ss = ss;
+        timer_remove(&script_triggers[9].timer);
+        timer_add(&script_triggers[9].timer, GRID_SCRIPT_TRIGGER,
+                  &script_triggers_callback, (void *)&script_triggers[9]);
+        ss->grid.grid_dirty = 1;
+        run_script(ss, INIT_SCRIPT);
         return 1;
     }
 
@@ -969,12 +977,8 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
         if (!z) return 1;
 
         if (y == 3 && x == 6) { history_prev(); }
-        else if (y == 4 && x == 6) {
-            history_next();
-        }
-        else if (y == 4 && x == 7 && !from_held) {
-            execute_line();
-        }
+        else if (y == 4 && x == 6) { history_next(); }
+        else if (y == 4 && x == 7 && !from_held) { execute_line(); }
 
         return 1;
     }
@@ -1081,8 +1085,8 @@ void grid_process_key(scene_state_t *ss, u8 _x, u8 _y, u8 z, u8 emulated) {
         if (grid_control_process_key(ss, x, y, z, 0)) return;
 
     u8 refresh = 0;
-    u8 scripts[SCRIPT_COUNT];
-    for (u8 i = 0; i < SCRIPT_COUNT; i++) scripts[i] = 0;
+    u8 scripts[EDITABLE_SCRIPT_COUNT];
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++) scripts[i] = 0;
 
     for (u8 i = 0; i < GRID_XYPAD_COUNT; i++) {
         if (z && GXYC.enabled && SG.group[GXYC.group].enabled &&
@@ -1267,7 +1271,7 @@ void grid_process_key(scene_state_t *ss, u8 _x, u8 _y, u8 z, u8 emulated) {
         }
     }
 
-    for (u8 i = 0; i < SCRIPT_COUNT; i++)
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++)
         if (scripts[i]) run_script(ss, i);
 
     if (refresh) SG.grid_dirty = SG.scr_dirty = 1;
@@ -1278,8 +1282,8 @@ void grid_process_key_hold_repeat(scene_state_t *ss, u8 x, u8 y) {
         if (grid_control_process_key(ss, x, y, 1, 1)) return;
 
     u8 refresh = 0;
-    u8 scripts[SCRIPT_COUNT];
-    for (u8 i = 0; i < SCRIPT_COUNT; i++) scripts[i] = 0;
+    u8 scripts[EDITABLE_SCRIPT_COUNT];
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++) scripts[i] = 0;
 
     u8 update = 0;
     for (u8 i = 0; i < GRID_FADER_COUNT; i++) {
@@ -1318,7 +1322,7 @@ void grid_process_key_hold_repeat(scene_state_t *ss, u8 x, u8 y) {
         }
     }
 
-    for (u8 i = 0; i < SCRIPT_COUNT; i++)
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++)
         if (scripts[i]) run_script(ss, i);
 
     if (refresh) SG.grid_dirty = SG.scr_dirty = 1;
@@ -1338,8 +1342,8 @@ void hold_repeat_timer_callback(void *o) {
 
 void grid_process_fader_slew(scene_state_t *ss) {
     u8 refresh = 0;
-    u8 scripts[SCRIPT_COUNT];
-    for (u8 i = 0; i < SCRIPT_COUNT; i++) scripts[i] = 0;
+    u8 scripts[EDITABLE_SCRIPT_COUNT];
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++) scripts[i] = 0;
 
     for (u8 i = 0; i < GRID_FADER_COUNT; i++) {
         if (!GF.slide) continue;
@@ -1364,7 +1368,7 @@ void grid_process_fader_slew(scene_state_t *ss) {
         }
     }
 
-    for (u8 i = 0; i < SCRIPT_COUNT; i++)
+    for (u8 i = 0; i < EDITABLE_SCRIPT_COUNT; i++)
         if (scripts[i]) run_script(ss, i);
 
     if (refresh) SG.grid_dirty = SG.scr_dirty = 1;

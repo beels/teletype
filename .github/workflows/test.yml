@@ -10,10 +10,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run clang-format
+      run: |
+        curl -O https://raw.githubusercontent.com/Sarcasm/run-clang-format/master/run-clang-format.py
+        python ./run-clang-format.py -r module simulator src tests --style=file
   run-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Install ragel
@@ -25,7 +33,7 @@ jobs:
   build-simulator:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Install ragel
@@ -62,3 +70,27 @@ jobs:
         with:
           path: module/teletype.hex
           name: teletype.hex
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Setup TinyTeX
+        uses: r-lib/actions/setup-tinytex@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get install pandoc
+          pip install -r utils/requirements.pip
+          tlmgr install titlesec ulem
+          fmtutil-sys -all
+      - name: Build documentation
+        run: |
+          cd docs
+          make
+      - name: Upload docs to artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: docs/teletype.pdf
+          name: teletype.pdf

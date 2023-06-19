@@ -16,6 +16,10 @@ static void op_CV_OFF_get(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
 static void op_CV_OFF_set(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
+static void op_CV_CAL_set(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs);
+static void op_CV_CAL_RESET_set(const void *NOTUSED(data), scene_state_t *ss,
+                                exec_state_t *NOTUSED(es), command_state_t *cs);
 static void op_IN_get(const void *NOTUSED(data), scene_state_t *ss,
                       exec_state_t *NOTUSED(es), command_state_t *cs);
 static void op_IN_SCALE_set(const void *NOTUSED(data), scene_state_t *ss,
@@ -55,6 +59,8 @@ static void op_TR_TOG_get(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
 static void op_TR_PULSE_get(const void *data, scene_state_t *ss,
                             exec_state_t *es, command_state_t *cs);
+static void op_CV_GET_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                          command_state_t *cs);
 static void op_CV_SET_get(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
 static void op_MUTE_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -83,6 +89,8 @@ static void op_PRINT_set(const void *data, scene_state_t *ss, exec_state_t *es,
 const tele_op_t op_CV       = MAKE_GET_SET_OP(CV      , op_CV_get      , op_CV_set     , 1, true);
 const tele_op_t op_CV_OFF   = MAKE_GET_SET_OP(CV.OFF  , op_CV_OFF_get  , op_CV_OFF_set , 1, true);
 const tele_op_t op_CV_SLEW  = MAKE_GET_SET_OP(CV.SLEW , op_CV_SLEW_get , op_CV_SLEW_set, 1, true);
+const tele_op_t op_CV_CAL   = MAKE_GET_OP(CV.CAL , op_CV_CAL_set, 3, false);
+const tele_op_t op_CV_CAL_RESET = MAKE_GET_OP(CV.CAL.RESET , op_CV_CAL_RESET_set, 1, false);
 const tele_op_t op_IN       = MAKE_GET_OP    (IN      , op_IN_get      , 0, true);
 const tele_op_t op_IN_SCALE = MAKE_GET_OP    (IN.SCALE, op_IN_SCALE_set, 2, false);
 const tele_op_t op_PARAM    = MAKE_GET_OP    (PARAM   , op_PARAM_get   , 0, true);
@@ -94,6 +102,7 @@ const tele_op_t op_TR_TIME  = MAKE_GET_SET_OP(TR.TIME , op_TR_TIME_get , op_TR_T
 const tele_op_t op_TR_TOG   = MAKE_GET_OP    (TR.TOG  , op_TR_TOG_get  , 1, false);
 const tele_op_t op_TR_PULSE = MAKE_GET_OP    (TR.PULSE, op_TR_PULSE_get, 1, false);
 const tele_op_t op_TR_P     = MAKE_ALIAS_OP  (TR.P    , op_TR_PULSE_get, NULL, 1, false);
+const tele_op_t op_CV_GET   = MAKE_GET_OP    (CV.GET  , op_CV_GET_get  , 1, true);
 const tele_op_t op_CV_SET   = MAKE_GET_OP    (CV.SET  , op_CV_SET_get  , 2, false);
 const tele_op_t op_MUTE     = MAKE_GET_SET_OP(MUTE    , op_MUTE_get    , op_MUTE_set   , 1, true);
 const tele_op_t op_STATE    = MAKE_GET_OP    (STATE   , op_STATE_get   , 1, true );
@@ -222,7 +231,6 @@ static void op_CV_OFF_set(const void *NOTUSED(data), scene_state_t *ss,
                           exec_state_t *NOTUSED(es), command_state_t *cs) {
     int16_t a = cs_pop(cs);
     int16_t b = cs_pop(cs);
-    ss->variables.cv_off[a] = b;
     a--;
     if (a < 0)
         return;
@@ -237,6 +245,36 @@ static void op_CV_OFF_set(const void *NOTUSED(data), scene_state_t *ss,
         tele_ii_tx(addr, d, 4);
     }
 }
+
+static void op_CV_CAL_set(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t n = cs_pop(cs);
+    int16_t vv1v = cs_pop(cs);
+    int16_t vv3v = cs_pop(cs);
+    n -= 1;
+    if (n < 0 || n > 3) { return; }
+
+    // using slow software floating point here is okay,
+    // this is ideally a one-time op and doesn't need to be fast.
+    double scale = (4915.0 - 1638.0) / ((vv3v - vv1v) * 1.6383);
+    double offset = 4915.0 / scale - vv3v * 1.6383;
+    int32_t m = (int32_t)(scale * (1 << 15));
+    int32_t b = (int32_t)(offset * (1 << 15));
+
+    tele_cv_cal(n, b, m);
+}
+
+static void op_CV_CAL_RESET_set(const void *NOTUSED(data),
+                                scene_state_t *NOTUSED(ss),
+                                exec_state_t *NOTUSED(es),
+                                command_state_t *cs) {
+    int16_t n = cs_pop(cs);
+    n -= 1;
+    if (n < 0 || n > 3) { return; }
+
+    tele_cv_cal(n, 0, 1);
+}
+
 
 static void op_IN_get(const void *NOTUSED(data), scene_state_t *ss,
                       exec_state_t *NOTUSED(es), command_state_t *cs) {
@@ -368,9 +406,7 @@ static void op_TR_POL_set(const void *NOTUSED(data), scene_state_t *ss,
     a--;
     if (a < 0)
         return;
-    else if (a < 4) {
-        ss->variables.tr_pol[a] = b > 0;
-    }
+    else if (a < 4) { ss->variables.tr_pol[a] = b > 0; }
     else if (a < 20) {
         uint8_t d[] = { II_ANSIBLE_TR_POL, a & 0x3, b > 0 };
         uint8_t addr = II_ANSIBLE_ADDR + (((a - 4) >> 2) << 1);
@@ -409,6 +445,7 @@ static void op_TR_TIME_set(const void *NOTUSED(data), scene_state_t *ss,
         return;
     else if (a < 4) {
         ss->variables.tr_time[a] = b;
+        tele_tr_pulse_time(a, b);
     }
     else if (a < 20) {
         uint8_t d[] = { II_ANSIBLE_TR_TIME, a & 0x3, b >> 8, b & 0xff };
@@ -447,14 +484,20 @@ static void op_TR_PULSE_get(const void *NOTUSED(data), scene_state_t *ss,
         int16_t time = ss->variables.tr_time[a];  // pulse time
         if (time <= 0) return;  // if time <= 0 don't do anything
         ss->variables.tr[a] = ss->variables.tr_pol[a];
-        ss->tr_pulse_timer[a] = time;  // set time
         tele_tr(a, ss->variables.tr[a]);
+        tele_tr_pulse(a, time);
     }
     else if (a < 20) {
         uint8_t d[] = { II_ANSIBLE_TR_PULSE, a & 0x3 };
         uint8_t addr = II_ANSIBLE_ADDR + (((a - 4) >> 2) << 1);
         tele_ii_tx(addr, d, 2);
     }
+}
+
+static void op_CV_GET_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    uint8_t i = cs_pop(cs) - 1;
+    cs_push(cs, i < 4 ? tele_get_cv(i) : 0);
 }
 
 static void op_CV_SET_get(const void *NOTUSED(data), scene_state_t *ss,
@@ -485,9 +528,7 @@ static void op_MUTE_get(const void *NOTUSED(data), scene_state_t *ss,
                         exec_state_t *NOTUSED(es), command_state_t *cs) {
     int16_t a = cs_pop(cs) - 1;
     if (a >= 0 && a < TRIGGER_INPUTS) { cs_push(cs, ss_get_mute(ss, a)); }
-    else {
-        cs_push(cs, 0);
-    }
+    else { cs_push(cs, 0); }
 }
 
 static void op_MUTE_set(const void *NOTUSED(data), scene_state_t *ss,
