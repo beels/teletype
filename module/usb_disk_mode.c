@@ -34,10 +34,6 @@
 // Change to 1 to enable debug "fail" output from early test code.
 #define USB_DISK_TEST 0
 
-void draw_usb_menu_item(uint8_t item_num, const char* text);
-bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun);
-void tele_usb_disk_read_operation(void);
-
 // Subsystem control
 static void tele_usb_disk_init(void);
 static void tele_usb_disk_finish(void);
@@ -142,6 +138,9 @@ void tele_usb_disk_PollADC(int32_t data) {
 // ============================================================================
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
+
+// Default (hardware) implementations of functions that are overridden in
+// diskmenu-simulator.
 
 void diskmenu_io_close(void) {
     file_close();
@@ -257,58 +256,6 @@ bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
     return false;
 }
 
-// *very* basic USB operations menu
-
-
-typedef enum {
-    USB_MENU_COMMAND_WRITE = 0,
-    USB_MENU_COMMAND_READ = 1,
-    USB_MENU_COMMAND_BOTH = 2,
-    USB_MENU_COMMAND_EXIT = 3,
-} usb_menu_command_t;
-
-usb_menu_command_t usb_menu_command;
-
-void draw_usb_menu_item(uint8_t item_num, const char* text) {
-    uint8_t line_num = 4 + item_num;
-    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
-    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
-    region_fill(&line[line_num], bg);
-    font_string_region_clip_tab(&line[line_num], text, 2, 0, fg, bg);
-    region_draw(&line[line_num]);
-}
-
-void handler_usb_PollADC(int32_t data) {
-    uint16_t adc[4];
-    adc_convert(&adc);
-    uint8_t cursor = adc[1] >> 9;
-    uint8_t deadzone = cursor & 1;
-    cursor >>= 1;
-    if (!deadzone || abs(cursor - usb_menu_command) > 1) {
-        usb_menu_command = cursor;
-    }
-}
-
-void handler_usb_Front(int32_t data) {
-    // disable timers
-    u8 flags = irqs_pause();
-
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
-
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    irqs_resume(flags);
-}
-
-void handler_usb_ScreenRefresh(int32_t data) {
-    draw_usb_menu_item(0, "WRITE TO USB");
-    draw_usb_menu_item(1, "READ FROM USB");
-    draw_usb_menu_item(2, "DO BOTH");
-    draw_usb_menu_item(3, "EXIT");
-}
-
-
 void diskmenu_filelist_close() {
     nav_filelist_reset();
     nav_exit();
@@ -368,10 +315,6 @@ void diskmenu_flash_write(uint8_t scene_id,
     flash_write(scene_id, scene, text);
 }
 
-void diskmenu_dbg(const char *str) {
-    print_dbg(str);
-}
-
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
 
     // The knob has a 12 bit range, and has a fair amount of jitter in the low
@@ -424,7 +367,68 @@ int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
     return value;
 }
 
+void diskmenu_dbg(const char *str) {
+    print_dbg(str);
+}
+
+// ============================================================================
+//                           USB DISK MINIMAL MENU
+// ----------------------------------------------------------------------------
+
+static void draw_usb_menu_item(uint8_t item_num, const char* text);
+
+// *very* basic USB operations menu
+
+typedef enum {
+    USB_MENU_COMMAND_WRITE = 0,
+    USB_MENU_COMMAND_READ = 1,
+    USB_MENU_COMMAND_BOTH = 2,
+    USB_MENU_COMMAND_EXIT = 3,
+} usb_menu_command_t;
+
+usb_menu_command_t usb_menu_command;
+
+void draw_usb_menu_item(uint8_t item_num, const char* text) {
+    uint8_t line_num = 4 + item_num;
+    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
+    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
+    region_fill(&line[line_num], bg);
+    font_string_region_clip_tab(&line[line_num], text, 2, 0, fg, bg);
+    region_draw(&line[line_num]);
+}
+
+void handler_usb_PollADC(int32_t data) {
+    uint16_t adc[4];
+    adc_convert(&adc);
+    uint8_t cursor = adc[1] >> 9;
+    uint8_t deadzone = cursor & 1;
+    cursor >>= 1;
+    if (!deadzone || abs(cursor - usb_menu_command) > 1) {
+        usb_menu_command = cursor;
+    }
+}
+
+void handler_usb_Front(int32_t data) {
+    // disable timers
+    u8 flags = irqs_pause();
+
+    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
+
+    // renable teletype
+    set_mode(M_LIVE);
+    assign_main_event_handlers();
+    irqs_resume(flags);
+}
+
+void handler_usb_ScreenRefresh(int32_t data) {
+    draw_usb_menu_item(0, "WRITE TO USB");
+    draw_usb_menu_item(1, "READ FROM USB");
+    draw_usb_menu_item(2, "DO BOTH");
+    draw_usb_menu_item(3, "EXIT");
+}
+
 // usb disk mode execution
+
 void tele_usb_disk_exec() {
     print_dbg("\r\nusb");
     uint8_t lun_state = 0;
@@ -462,133 +466,3 @@ void tele_usb_disk_exec() {
     }
 }
 
-bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
-    // WRITE SCENES
-    print_dbg("\r\nwriting scenes");
-
-    char filename[13];
-    strcpy(filename, "tt00s.txt");
-
-    char text_buffer[40];
-    strcpy(text_buffer, "WRITE");
-    region_fill(&line[0], 0);
-    font_string_region_clip_tab(&line[0], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[0]);
-
-    for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                   // buffer is large enough!
-        region_fill(&line[0], 0);
-        font_string_region_clip_tab(&line[0], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[0]);
-
-        flash_read(i, &scene, &text, 1, 1, 1);
-
-        if (!nav_file_create((FS_STRING)filename)) {
-            if (fs_g_status != FS_ERR_FILE_EXIST) {
-                if (fs_g_status == FS_LUN_WP) {
-                    // Test can be done only on no write protected
-                    // device
-                    return false;
-                }
-                *plun_state |= (1 << *plun);  // LUN test is done.
-                print_dbg("\r\nfail");
-                return false;
-            }
-        }
-
-        if (!file_open(FOPEN_MODE_W)) {
-            if (fs_g_status == FS_LUN_WP) {
-                // Test can be done only on no write protected
-                // device
-                return false;
-            }
-            *plun_state |= (1 << *plun);  // LUN test is done.
-            print_dbg("\r\nfail");
-            return false;
-        }
-
-        tt_serializer_t tele_usb_writer;
-        tele_usb_writer.write_char = &tele_usb_putc;
-        tele_usb_writer.write_buffer = &tele_usb_write_buf;
-        tele_usb_writer.print_dbg = &print_dbg;
-        tele_usb_writer.data =
-            NULL;  // asf disk i/o holds state, no handles needed
-        serialize_scene(&tele_usb_writer, &scene, &text);
-
-        file_close();
-        *plun_state |= (1 << *plun);  // LUN test is done.
-
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
-        }
-        else
-            filename[3]++;
-
-        print_dbg(".");
-    }
-
-    nav_filelist_reset();
-    return true;
-}
-
-void tele_usb_disk_read_operation() {
-    // READ SCENES
-    print_dbg("\r\nreading scenes...");
-
-    char filename[13];
-    strcpy(filename, "tt00.txt");
-
-    char text_buffer[40];
-    strcpy(text_buffer, "READ");
-    region_fill(&line[1], 0);
-    font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
-    region_draw(&line[1]);
-
-    for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
-        strcat(text_buffer, ".");  // strcat is dangerous, make sure the
-                                   // buffer is large enough!
-        region_fill(&line[1], 0);
-        font_string_region_clip_tab(&line[1], text_buffer, 2, 0, 0xa, 0);
-        region_draw(&line[1]);
-        if (nav_filelist_findname(filename, 0)) {
-            print_dbg("\r\nfound: ");
-            print_dbg(filename);
-            if (!file_open(FOPEN_MODE_R))
-                print_dbg("\r\ncan't open");
-            else {
-                tt_deserializer_t tele_usb_reader;
-                tele_usb_reader.read_char = &tele_usb_getc;
-                tele_usb_reader.eof = &tele_usb_eof;
-                tele_usb_reader.print_dbg = &print_dbg;
-                tele_usb_reader.data =
-                    NULL;  // asf disk i/o holds state, no handles needed
-                deserialize_scene(&tele_usb_reader, &scene, &text);
-
-                file_close();
-                flash_write(i, &scene, &text);
-            }
-        }
-
-        nav_filelist_reset();
-
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
-        }
-        else
-            filename[3]++;
-    }
-}

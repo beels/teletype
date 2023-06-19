@@ -30,15 +30,11 @@ void diskmenu_handle_button_timeout(void);
 void diskmenu_handle_PollADC(void);
 
 // ============================================================================
-//                           HARDWARE NON-ABSTRACTION
+//                           USB DISK MINIMAL MENU
 // ----------------------------------------------------------------------------
 
-// ... temporarily exposed to support dewb minimal menu operations
-
-void tele_usb_putc(void* self_data, uint8_t c);
-void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
-uint16_t tele_usb_getc(void* self_data);
-bool tele_usb_eof(void* self_data);
+bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun);
+void tele_usb_disk_read_operation(void);
 
 // ============================================================================
 //                           HARDWARE ABSTRACTION
