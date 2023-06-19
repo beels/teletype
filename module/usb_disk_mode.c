@@ -198,94 +198,6 @@ bool diskmenu_io_create(uint8_t *status, char *filename) {
     return false;
 }
 
-// *very* basic USB operations menu
-
-
-typedef enum {
-    USB_MENU_COMMAND_WRITE = 0,
-    USB_MENU_COMMAND_READ = 1,
-    USB_MENU_COMMAND_BOTH = 2,
-    USB_MENU_COMMAND_EXIT = 3,
-} usb_menu_command_t;
-
-usb_menu_command_t usb_menu_command;
-
-void draw_usb_menu_item(uint8_t item_num, const char* text) {
-    uint8_t line_num = 4 + item_num;
-    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
-    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
-    region_fill(&line[line_num], bg);
-    font_string_region_clip_tab(&line[line_num], text, 2, 0, fg, bg);
-    region_draw(&line[line_num]);
-}
-
-void handler_usb_PollADC(int32_t data) {
-    uint16_t adc[4];
-    adc_convert(&adc);
-    uint8_t cursor = adc[1] >> 9;
-    uint8_t deadzone = cursor & 1;
-    cursor >>= 1;
-    if (!deadzone || abs(cursor - usb_menu_command) > 1) {
-        usb_menu_command = cursor;
-    }
-}
-
-void handler_usb_Front(int32_t data) {
-    // disable timers
-    u8 flags = irqs_pause();
-
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_dewb(); }
-
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    irqs_resume(flags);
-}
-
-void handler_usb_ScreenRefresh(int32_t data) {
-    draw_usb_menu_item(0, "WRITE TO USB");
-    draw_usb_menu_item(1, "READ FROM USB");
-    draw_usb_menu_item(2, "DO BOTH");
-    draw_usb_menu_item(3, "EXIT");
-}
-
-void tele_usb_disk_dewb() {
-    print_dbg("\r\nusb");
-    uint8_t lun_state = 0;
-
-    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
-        // print_dbg("\r\nlun: ");
-        // print_dbg_ulong(lun);
-
-        // Mount drive
-        nav_drive_set(lun);
-        if (!nav_partition_mount()) {
-            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
-                // The test can not be done, if LUN is not present
-                lun_state &= ~(1 << lun);  // LUN test reseted
-                continue;
-            }
-            lun_state |= (1 << lun);  // LUN test is done.
-            print_dbg("\r\nfail");
-            // ui_test_finish(false); // Test fail
-            continue;
-        }
-        // Check if LUN has been already tested
-        if (lun_state & (1 << lun)) { continue; }
-
-        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            if (!tele_usb_disk_write_operation(&lun_state, &lun)) { continue; }
-        }
-        if (usb_menu_command == USB_MENU_COMMAND_READ ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            tele_usb_disk_read_operation();
-        }
-
-        nav_exit();
-    }
-}
-
 bool diskmenu_device_open(void) {
     // We assume that there is one and only one available LUN, otherwise it is
     // not safe to iterate through all possible LUN even after we finish
@@ -343,6 +255,211 @@ bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
     }
 
     return false;
+}
+
+// *very* basic USB operations menu
+
+
+typedef enum {
+    USB_MENU_COMMAND_WRITE = 0,
+    USB_MENU_COMMAND_READ = 1,
+    USB_MENU_COMMAND_BOTH = 2,
+    USB_MENU_COMMAND_EXIT = 3,
+} usb_menu_command_t;
+
+usb_menu_command_t usb_menu_command;
+
+void draw_usb_menu_item(uint8_t item_num, const char* text) {
+    uint8_t line_num = 4 + item_num;
+    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
+    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
+    region_fill(&line[line_num], bg);
+    font_string_region_clip_tab(&line[line_num], text, 2, 0, fg, bg);
+    region_draw(&line[line_num]);
+}
+
+void handler_usb_PollADC(int32_t data) {
+    uint16_t adc[4];
+    adc_convert(&adc);
+    uint8_t cursor = adc[1] >> 9;
+    uint8_t deadzone = cursor & 1;
+    cursor >>= 1;
+    if (!deadzone || abs(cursor - usb_menu_command) > 1) {
+        usb_menu_command = cursor;
+    }
+}
+
+void handler_usb_Front(int32_t data) {
+    // disable timers
+    u8 flags = irqs_pause();
+
+    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
+
+    // renable teletype
+    set_mode(M_LIVE);
+    assign_main_event_handlers();
+    irqs_resume(flags);
+}
+
+void handler_usb_ScreenRefresh(int32_t data) {
+    draw_usb_menu_item(0, "WRITE TO USB");
+    draw_usb_menu_item(1, "READ FROM USB");
+    draw_usb_menu_item(2, "DO BOTH");
+    draw_usb_menu_item(3, "EXIT");
+}
+
+
+void diskmenu_filelist_close() {
+    nav_filelist_reset();
+    nav_exit();
+}
+
+void diskmenu_display_clear(int line_no, uint8_t bg) {
+    region_fill(&line[line_no], bg);
+}
+
+void diskmenu_display_set(int line_no,
+                          uint8_t offset,
+                          const char *text,
+                          uint8_t fg,
+                          uint8_t bg)
+{
+    font_string_region_clip(&line[line_no], text, offset + 2, 0, fg, bg);
+}
+
+void diskmenu_display_draw(int line_no) {
+    region_draw(&line[line_no]);
+}
+
+void diskmenu_display_line(int line_no, const char *text)
+{
+    region_fill(&line[line_no], 0);
+
+    if (text && text[0]) {
+        font_string_region_clip(&line[line_no], text, 2, 0, 0xa, 0);
+    }
+
+    region_draw(&line[line_no]);
+}
+
+uint8_t display_font_string_position(const char* str, uint8_t pos) {
+    return font_string_position(str, pos);
+}
+
+uint8_t diskmenu_flash_scene_id(void) {
+    return flash_last_saved_scene();
+}
+
+void diskmenu_flash_read(uint8_t scene_id,
+                         scene_state_t *scene,
+                         char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
+{
+    flash_read(scene_id, scene, text, 1, 1, 1);
+}
+
+const char *diskmenu_flash_scene_text(uint8_t scene_id) {
+    return flash_scene_text(scene_id, 0);
+}
+
+void diskmenu_flash_write(uint8_t scene_id,
+                          scene_state_t *scene,
+                          char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
+{
+    flash_write(scene_id, scene, text);
+}
+
+void diskmenu_dbg(const char *str) {
+    print_dbg(str);
+}
+
+int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
+
+    // The knob has a 12 bit range, and has a fair amount of jitter in the low
+    // bits.  Division into more than 64 zones becomes increasingly unstable.
+    //
+    // Intentional knob movement is detected by
+    // adc[1] >> 8 != last_knob >> 8
+    //
+    // Knob turns seem to be considered volatile, so to ensure that there is no
+    // jitter in the output for selection-style values, it can be desireable to
+    // have every other value in a selection-style param be a dead zone.
+    //
+    // ```
+    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
+    // uint8_t deadzone = value & 1;
+    // value >>= 1;
+    // if (deadzone || abs(value - last_value) < 2) {
+    //     return;
+    // }
+    // last_value = value;
+    // // now do stuff
+    // ```
+
+    static uint16_t last_knob = 0;
+
+    uint16_t adc[4];
+
+    adc_convert(&adc);
+
+    uint16_t value = adc[1] >> (12 - (1 + resolution));
+
+    uint16_t deadzone = value & 1;
+    value >>= 1;
+
+    if (deadzone || abs(value - last_knob) < 2) {
+        value = last_knob;
+    }
+    else {
+        last_knob = value;
+    }
+
+    // Now scale the value, which right now is at knob resolution.
+
+    value = value / ((1 << resolution) / scale);
+
+    if (scale - 1 < value) {
+        value = scale - 1;
+    }
+
+    return value;
+}
+
+// usb disk mode execution
+void tele_usb_disk_exec() {
+    print_dbg("\r\nusb");
+    uint8_t lun_state = 0;
+
+    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
+        // print_dbg("\r\nlun: ");
+        // print_dbg_ulong(lun);
+
+        // Mount drive
+        nav_drive_set(lun);
+        if (!nav_partition_mount()) {
+            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
+                // The test can not be done, if LUN is not present
+                lun_state &= ~(1 << lun);  // LUN test reseted
+                continue;
+            }
+            lun_state |= (1 << lun);  // LUN test is done.
+            print_dbg("\r\nfail");
+            // ui_test_finish(false); // Test fail
+            continue;
+        }
+        // Check if LUN has been already tested
+        if (lun_state & (1 << lun)) { continue; }
+
+        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            if (!tele_usb_disk_write_operation(&lun_state, &lun)) { continue; }
+        }
+        if (usb_menu_command == USB_MENU_COMMAND_READ ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            tele_usb_disk_read_operation();
+        }
+
+        nav_exit();
+    }
 }
 
 bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
@@ -475,119 +592,3 @@ void tele_usb_disk_read_operation() {
             filename[3]++;
     }
 }
-
-void diskmenu_filelist_close() {
-    nav_filelist_reset();
-    nav_exit();
-}
-
-void diskmenu_display_clear(int line_no, uint8_t bg) {
-    region_fill(&line[line_no], bg);
-}
-
-void diskmenu_display_set(int line_no,
-                          uint8_t offset,
-                          const char *text,
-                          uint8_t fg,
-                          uint8_t bg)
-{
-    font_string_region_clip(&line[line_no], text, offset + 2, 0, fg, bg);
-}
-
-void diskmenu_display_draw(int line_no) {
-    region_draw(&line[line_no]);
-}
-
-void diskmenu_display_line(int line_no, const char *text)
-{
-    region_fill(&line[line_no], 0);
-
-    if (text && text[0]) {
-        font_string_region_clip(&line[line_no], text, 2, 0, 0xa, 0);
-    }
-
-    region_draw(&line[line_no]);
-}
-
-uint8_t display_font_string_position(const char* str, uint8_t pos) {
-    return font_string_position(str, pos);
-}
-
-uint8_t diskmenu_flash_scene_id(void) {
-    return flash_last_saved_scene();
-}
-
-void diskmenu_flash_read(uint8_t scene_id,
-                         scene_state_t *scene,
-                         char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
-{
-    flash_read(scene_id, scene, text, 1, 1, 1);
-}
-
-const char *diskmenu_flash_scene_text(uint8_t scene_id) {
-    return flash_scene_text(scene_id, 0);
-}
-
-void diskmenu_flash_write(uint8_t scene_id,
-                          scene_state_t *scene,
-                          char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
-{
-    flash_write(scene_id, scene, text);
-}
-
-void diskmenu_dbg(const char *str) {
-    print_dbg(str);
-}
-
-int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
-
-    // The knob has a 12 bit range, and has a fair amount of jitter in the low
-    // bits.  Division into more than 64 zones becomes increasingly unstable.
-    //
-    // Intentional knob movement is detected by
-    // adc[1] >> 8 != last_knob >> 8
-    //
-    // Knob turns seem to be considered volatile, so to ensure that there is no
-    // jitter in the output for selection-style values, it can be desireable to
-    // have every other value in a selection-style param be a dead zone.
-    //
-    // ```
-    // uint8_t value = adc[1] >> (12 - (1 + desired_bits));
-    // uint8_t deadzone = value & 1;
-    // value >>= 1;
-    // if (deadzone || abs(value - last_value) < 2) {
-    //     return;
-    // }
-    // last_value = value;
-    // // now do stuff
-    // ```
-
-    static uint16_t last_knob = 0;
-
-    uint16_t adc[4];
-
-    adc_convert(&adc);
-
-    uint16_t value = adc[1] >> (12 - (1 + resolution));
-
-    uint16_t deadzone = value & 1;
-    value >>= 1;
-
-    if (deadzone || abs(value - last_knob) < 2) {
-        value = last_knob;
-    }
-    else {
-        last_knob = value;
-    }
-
-    // Now scale the value, which right now is at knob resolution.
-
-    value = value / ((1 << resolution) / scale);
-
-    if (scale - 1 < value) {
-        value = scale - 1;
-    }
-
-    return value;
-}
-

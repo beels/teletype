@@ -74,7 +74,7 @@
 void handler_usb_PollADC(int32_t data);
 void handler_usb_Front(int32_t data);
 void handler_usb_ScreenRefresh(int32_t data);
-void tele_usb_disk_dewb(void);
+void tele_usb_disk_exec(void);
 
 void tele_usb_disk(void);
 void tele_usb_disk_handler_Front(int32_t);
