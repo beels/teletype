@@ -4,8 +4,6 @@
 
 #include "ops/op.h"
 
-#include "events.h"
-
 const tele_op_t *tele_ops[E_OP__LENGTH];
 const tele_mod_t *tele_mods[E_MOD__LENGTH];
 
@@ -171,37 +169,3 @@ void grid_key_press(uint8_t x, uint8_t y, uint8_t z) {
     printf("GRID KEY PRESS x:%" PRIu8 " y:%" PRIu8 " z:%" PRIu8, x, y, z);
     printf("\n");
 }
-
-// ============================================================================
-//                        APPLICATION INFRASTRUCTURE
-// ----------------------------------------------------------------------------
-
-void handler_None(int32_t data) {}
-
-// defined in globals.h
-void empty_event_handlers() {
-    for (size_t i = 0; i < kNumEventTypes; i++) {
-        app_event_handlers[i] = &handler_None;
-    }
-}
-
-// global array of pointers to handlers
-void (*app_event_handlers[kNumEventTypes])(s32 data) = { handler_None };
-
-#if 0
-// init event queue
-void init_events( void ) {
-}
-
-// check the queue for pending events
-// return 1 if found
-u8 event_next( event_t *e ) {
-    return 0;
-}
-
-// add event to tail of queue
-// return 1 if success
-u8 event_post( event_t *e ) {
-    return 0;
-}
-#endif

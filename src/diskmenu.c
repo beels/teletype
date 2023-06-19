@@ -47,6 +47,9 @@ static void disk_browse_render_item(int index, int selection);
 static void disk_browse_render_page(int index);
 static void disk_browse_navigate(int old_index, int new_index);
 
+
+static void tele_usb_disk_exec(void);
+
 // ============================================================================
 //                           SERIALIZATION SUPPORT
 // ----------------------------------------------------------------------------
@@ -885,7 +888,9 @@ void tele_usb_disk_read_operation() {
     diskmenu_filelist_close();
 }
 
-// Application Infrastructure
+// ============================================================================
+//                           USB DISK MINIMAL MENU
+// ----------------------------------------------------------------------------
 
 // usb disk mode entry point
 void tele_usb_disk() {
@@ -895,5 +900,76 @@ void tele_usb_disk() {
     // clear screen
     for (size_t i = 0; i < 8; i++) {
         diskmenu_display_clear(i, 0);
+        diskmenu_display_draw(i);
     }
 }
+
+static void draw_usb_menu_item(uint8_t item_num, const char* text);
+
+// *very* basic USB operations menu
+
+typedef enum {
+    USB_MENU_COMMAND_WRITE = 0,
+    USB_MENU_COMMAND_READ = 1,
+    USB_MENU_COMMAND_BOTH = 2,
+    USB_MENU_COMMAND_EXIT = 3,
+} usb_menu_command_t;
+
+usb_menu_command_t usb_menu_command;
+
+// usb disk mode execution
+
+void tele_usb_disk_exec() {
+    //print_dbg("\r\nusb");
+    uint8_t lun_state = 0;  // unused
+    uint8_t lun = 0;        // unused
+
+    if (diskmenu_device_open()) {
+
+        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            tele_usb_disk_write_operation(&lun_state, &lun);
+        }
+        if (usb_menu_command == USB_MENU_COMMAND_READ ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            tele_usb_disk_read_operation();
+        }
+
+        diskmenu_filelist_close();
+    }
+}
+
+void draw_usb_menu_item(uint8_t item_num, const char* text) {
+    uint8_t line_num = 4 + item_num;
+    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
+    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
+    diskmenu_display_clear(line_num, bg);
+    diskmenu_display_set(line_num, 0, text, fg, bg);
+    diskmenu_display_draw(line_num);
+}
+
+void handler_usb_PollADC(int32_t data) {
+    usb_menu_command = diskmenu_param(usb_menu_command);
+}
+
+void handler_usb_Front(int32_t data) {
+    // disable timers
+    u8 flags = diskmenu_irqs_pause();
+
+    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
+
+    // renable teletype
+    tele_usb_disk_finish();
+    diskmenu_irqs_resume(flags);
+}
+
+void handler_usb_ScreenRefresh(int32_t data) {
+    draw_usb_menu_item(0, "WRITE TO USB");
+    draw_usb_menu_item(1, "READ FROM USB");
+    draw_usb_menu_item(2, "DO BOTH");
+    draw_usb_menu_item(3, "EXIT");
+
+    // No-op on hardware; render page in simulation.
+    diskmenu_display_print();
+}
+

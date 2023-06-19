@@ -8,14 +8,29 @@
 
 #include "diskmenu.h"
 #include "util.h"
+#include "events.h"
 
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+
+// ============================================================================
+//                        APPLICATION INFRASTRUCTURE
+// ----------------------------------------------------------------------------
+
+void handler_None(int32_t data) {}
+
+// defined in globals.h
+void empty_event_handlers() {
+    for (size_t i = 0; i < kNumEventTypes; i++) {
+        app_event_handlers[i] = &handler_None;
+    }
+}
+
+// global array of pointers to handlers
+void (*app_event_handlers[kNumEventTypes])(s32 data) = { handler_None };
 
 char scratch[1024];
 int dm_lastPoll = -1;
 extern char display_lines[8][43];
-void diskmenu_display_init(void);
-void diskmenu_display_print(void);
 
 enum {
     kQuit,
@@ -64,17 +79,18 @@ int main() {
 
     printf("teletype diskmenu. ('q' quits)\n\n");
 
-    diskmenu_display_init();
-    diskmenu_set_exit_handler(&done);
-    diskmenu_set_scratch_buffer(scratch, sizeof(scratch));
+    tele_usb_disk();
+    // diskmenu_display_init();
+    // diskmenu_set_exit_handler(&done);
+    // diskmenu_set_scratch_buffer(scratch, sizeof(scratch));
 
-    diskmenu_init();
-    diskmenu_handle_PollADC();
+    // diskmenu_init();
+    (*app_event_handlers[kEventPollADC])(0);
 
     while (simulator_active) {
 
-        diskmenu_handle_PollADC();
-        diskmenu_display_print();
+        (*app_event_handlers[kEventPollADC])(0);
+        (*app_event_handlers[kEventScreenRefresh])(0);
 
         printf("> ");
         fgets(in, 256, stdin);
@@ -92,23 +108,28 @@ int main() {
             case kShort:
                 {
                     //printf("short\n");
-                    diskmenu_handle_short_press();
+                    (*app_event_handlers[kEventFront])(0);
+                    (*app_event_handlers[kEventFront])(1);
                 } break;
             case kLong:
                 {
                     //printf("long\n");
-                    diskmenu_handle_long_press();
+                    (*app_event_handlers[kEventFront])(0);
+                    for (int i = 0; i < 8; ++i) {
+                        (*app_event_handlers[kEventKeyTimer])(0);
+                    }
+                    (*app_event_handlers[kEventFront])(1);
                 } break;
-            case kTimeout:
-                {
-                    //printf("timeout\n");
-                    diskmenu_handle_button_timeout();
-                } break;
+            // case kTimeout:
+            //     {
+            //         //printf("timeout\n");
+            //         diskmenu_handle_button_timeout();
+            //     } break;
             case kParam:
                 {
                     //printf("param: %d\n", arg);
                     dm_lastPoll = arg;
-                    diskmenu_handle_PollADC();
+                    (*app_event_handlers[kEventPollADC])(0);
                 } break;
             case kQuit:
                 {

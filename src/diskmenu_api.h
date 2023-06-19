@@ -12,6 +12,12 @@
 
 void diskmenu_assign_msc_event_handlers(void);
 
+uint8_t diskmenu_irqs_pause(void);
+void diskmenu_irqs_resume(uint8_t flags);
+
+// Subsystem control
+void tele_usb_disk_finish(void);
+
 // ============================================================================
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
@@ -43,6 +49,7 @@ void diskmenu_display_set(int line_no,
                           uint8_t fg,
                           uint8_t bg);
 void diskmenu_display_draw(int line_no);
+void diskmenu_display_print(void);
 void diskmenu_display_line(int line_no, const char *text);
 uint8_t display_font_string_position(const char* str, uint8_t pos);
 // flash
@@ -56,7 +63,10 @@ void diskmenu_flash_write(
                      uint8_t scene_id,
                      scene_state_t *scene,
                      char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
+
+int diskmenu_param(int last_value);
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale);
+
 void diskmenu_dbg(const char *str);
 #endif
 

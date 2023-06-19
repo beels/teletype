@@ -17,6 +17,11 @@ enum {
 
 // Main entry point
 void tele_usb_disk(void);
+void handler_usb_PollADC(int32_t data);
+void handler_usb_Front(int32_t data);
+void handler_usb_ScreenRefresh(int32_t data);
+//void tele_usb_disk_exec(void);
+
 
 // Subsystem interface
 void diskmenu_set_exit_handler(void (*exit_handler)(void));

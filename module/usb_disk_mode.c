@@ -37,16 +37,20 @@
 // Change to 1 to enable debug "fail" output from early test code.
 #define USB_DISK_TEST 0
 
-// Subsystem control
-static void tele_usb_disk_init(void);
-static void tele_usb_disk_finish(void);
-
 // ============================================================================
 //                        APPLICATION INFRASTRUCTURE
 // ----------------------------------------------------------------------------
 
 void diskmenu_assign_msc_event_handlers(void) {
     assign_msc_event_handlers();
+}
+
+uint8_t diskmenu_irqs_pause() {
+    return irqs_pause();
+}
+
+void diskmenu_irqs_resume(uint8_t flags) {
+    irqs_resume(flags);
 }
 
 // ============================================================================
@@ -190,7 +194,7 @@ bool diskmenu_io_eof(void) {
 
 bool diskmenu_io_create(uint8_t *status, char *filename) {
     if (nav_file_create((FS_STRING) filename)) {
-        return false;
+        return true;
     }
 
     if (status) {
@@ -282,6 +286,10 @@ void diskmenu_display_draw(int line_no) {
     region_draw(&line[line_no]);
 }
 
+void diskmenu_display_print(void) {
+    // Do nothing.  All rendering is immediate on hardware.
+}
+
 void diskmenu_display_line(int line_no, const char *text)
 {
     region_fill(&line[line_no], 0);
@@ -317,6 +325,20 @@ void diskmenu_flash_write(uint8_t scene_id,
                           char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
 {
     flash_write(scene_id, scene, text);
+}
+
+int diskmenu_param(int last_value) {
+    uint16_t adc[4];
+    adc_convert(&adc);
+    uint8_t cursor = adc[1] >> 9;
+    uint8_t deadzone = cursor & 1;
+    cursor >>= 1;
+    if (!deadzone || abs(cursor - last_value) > 1) {
+        return cursor;
+    }
+    else {
+        return last_value;
+    }
 }
 
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
@@ -373,100 +395,5 @@ int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
 
 void diskmenu_dbg(const char *str) {
     print_dbg(str);
-}
-
-// ============================================================================
-//                           USB DISK MINIMAL MENU
-// ----------------------------------------------------------------------------
-
-static void draw_usb_menu_item(uint8_t item_num, const char* text);
-
-// *very* basic USB operations menu
-
-typedef enum {
-    USB_MENU_COMMAND_WRITE = 0,
-    USB_MENU_COMMAND_READ = 1,
-    USB_MENU_COMMAND_BOTH = 2,
-    USB_MENU_COMMAND_EXIT = 3,
-} usb_menu_command_t;
-
-usb_menu_command_t usb_menu_command;
-
-void draw_usb_menu_item(uint8_t item_num, const char* text) {
-    uint8_t line_num = 4 + item_num;
-    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
-    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
-    region_fill(&line[line_num], bg);
-    font_string_region_clip_tab(&line[line_num], text, 2, 0, fg, bg);
-    region_draw(&line[line_num]);
-}
-
-void handler_usb_PollADC(int32_t data) {
-    uint16_t adc[4];
-    adc_convert(&adc);
-    uint8_t cursor = adc[1] >> 9;
-    uint8_t deadzone = cursor & 1;
-    cursor >>= 1;
-    if (!deadzone || abs(cursor - usb_menu_command) > 1) {
-        usb_menu_command = cursor;
-    }
-}
-
-void handler_usb_Front(int32_t data) {
-    // disable timers
-    u8 flags = irqs_pause();
-
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
-
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    irqs_resume(flags);
-}
-
-void handler_usb_ScreenRefresh(int32_t data) {
-    draw_usb_menu_item(0, "WRITE TO USB");
-    draw_usb_menu_item(1, "READ FROM USB");
-    draw_usb_menu_item(2, "DO BOTH");
-    draw_usb_menu_item(3, "EXIT");
-}
-
-// usb disk mode execution
-
-void tele_usb_disk_exec() {
-    print_dbg("\r\nusb");
-    uint8_t lun_state = 0;
-
-    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
-        // print_dbg("\r\nlun: ");
-        // print_dbg_ulong(lun);
-
-        // Mount drive
-        nav_drive_set(lun);
-        if (!nav_partition_mount()) {
-            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
-                // The test can not be done, if LUN is not present
-                lun_state &= ~(1 << lun);  // LUN test reseted
-                continue;
-            }
-            lun_state |= (1 << lun);  // LUN test is done.
-            print_dbg("\r\nfail");
-            // ui_test_finish(false); // Test fail
-            continue;
-        }
-        // Check if LUN has been already tested
-        if (lun_state & (1 << lun)) { continue; }
-
-        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            if (!tele_usb_disk_write_operation(&lun_state, &lun)) { continue; }
-        }
-        if (usb_menu_command == USB_MENU_COMMAND_READ ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            tele_usb_disk_read_operation();
-        }
-
-        nav_exit();
-    }
 }
 

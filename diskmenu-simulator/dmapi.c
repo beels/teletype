@@ -5,6 +5,9 @@
 #include "state.h"
 #include "scene_serialization.h"
 
+#include "dm.h"
+#include "events.h"
+
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 // ============================================================================
@@ -12,6 +15,28 @@
 // ----------------------------------------------------------------------------
 
 void diskmenu_assign_msc_event_handlers() {
+    empty_event_handlers();
+
+    // ARB:
+    // These handlers are distinguished from the main ones by the inserted
+    // "_usb_" tag.
+
+    app_event_handlers[kEventFront] = &handler_usb_Front;
+    app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
+    app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
+    //app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
+}
+
+uint8_t diskmenu_irqs_pause() {
+    return 0;
+}
+
+void diskmenu_irqs_resume(uint8_t flags) {
+}
+
+// Subsystem control
+void tele_usb_disk_finish(void) {
+    done();
 }
 
 // ============================================================================
@@ -127,16 +152,22 @@ void diskmenu_filelist_close(void) {
 
 // display
 #define DISPLAY_LINE_MAXLEN 42
-char display_lines[8][DISPLAY_LINE_MAXLEN + 5 + 1];
+char display_lines[8][DISPLAY_LINE_MAXLEN + 1 + 5 + 1];
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {
     for (int i = 0; i < DISPLAY_LINE_MAXLEN; ++i) {
         display_lines[line_no][i] = ' ';
     }
-    display_lines[line_no][DISPLAY_LINE_MAXLEN] = '\0';
-    strncpy(display_lines[line_no] + DISPLAY_LINE_MAXLEN + 1,
+    if (bg) {
+        display_lines[line_no][DISPLAY_LINE_MAXLEN] = '*';
+    }
+    else {
+        display_lines[line_no][DISPLAY_LINE_MAXLEN] = '|';
+    }
+    display_lines[line_no][DISPLAY_LINE_MAXLEN + 1] = '\0';
+    strncpy(display_lines[line_no] + DISPLAY_LINE_MAXLEN + 2,
             "omfg", 4);
-    display_lines[line_no][DISPLAY_LINE_MAXLEN + 5] = '\0';
+    display_lines[line_no][DISPLAY_LINE_MAXLEN + 6] = '\0';
 }
 
 void diskmenu_display_set(int line_no,
@@ -169,18 +200,12 @@ void diskmenu_display_line(int line_no, const char *text) {
     diskmenu_display_draw(line_no);
 }
 
-void diskmenu_display_init(void) {
-    for (int i = 0; i < 8; ++i) {
-        diskmenu_display_clear(i, 0);
-    }
-}
-
 void diskmenu_display_print(void) {
-    printf("===============================\n");
+    printf("==========================================\n");
     for (int i = 0; i < 8; ++i) {
         printf("%s\n", display_lines[i]);
     }
-    printf("-------------------------------\n");
+    printf("------------------------------------------\n");
 }
 
 uint8_t display_font_string_position(const char* str, uint8_t pos) {
@@ -209,6 +234,15 @@ void diskmenu_flash_write(
 }
 
 extern int dm_lastPoll;
+
+int diskmenu_param(int last_value) {
+    if (dm_lastPoll < 0) {
+        return last_value;
+    }
+    else {
+        return dm_lastPoll;
+    }
+}
 
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
     if (dm_lastPoll < 0) {
