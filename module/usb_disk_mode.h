@@ -71,9 +71,4 @@
 // long enough to be considered a "long" press, the ">" marker changes to a
 // "*".
 
-void tele_usb_disk(void);
-void tele_usb_disk_handler_Front(int32_t);
-void tele_usb_disk_handler_KeyTimer(int32_t data);
-void tele_usb_disk_PollADC(int32_t);
-
 #endif

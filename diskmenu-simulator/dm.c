@@ -7,6 +7,7 @@
 #include <time.h>
 
 #include "diskmenu.h"
+#include "scene_serialization.h"
 #include "util.h"
 #include "events.h"
 
@@ -27,6 +28,9 @@ void empty_event_handlers() {
 
 // global array of pointers to handlers
 void (*app_event_handlers[kNumEventTypes])(s32 data) = { handler_None };
+
+char copy_buffer[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+uint8_t copy_buffer_len = 0;
 
 char scratch[1024];
 int dm_lastPoll = -1;

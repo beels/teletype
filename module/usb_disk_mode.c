@@ -45,6 +45,20 @@ void diskmenu_assign_msc_event_handlers(void) {
     assign_msc_event_handlers();
 }
 
+void diskmenu_assign_advanced_menu_event_handlers(void) {
+    empty_event_handlers();
+
+    app_event_handlers[kEventPollADC] = &tele_usb_disk_PollADC;
+
+    // one day this could be used to map the front button and pot to be used as
+    // a UI with a memory stick
+
+    app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
+    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
+    app_event_handlers[kEventScreenRefresh] =
+                                          &tele_usb_disk_handler_ScreenRefresh;
+}
+
 uint8_t diskmenu_irqs_pause() {
     return irqs_pause();
 }
@@ -53,94 +67,19 @@ void diskmenu_irqs_resume(uint8_t flags) {
     irqs_resume(flags);
 }
 
-// ============================================================================
-//                                 Utilities
-// ----------------------------------------------------------------------------
-
-static int button_counter = 0;
-static bool long_press = false;
+void diskmenu_set_default_timers_enabled(bool value) {
+    default_timers_enabled = value;
+}
 
 // ============================================================================
 //                             Subsystem Control
 // ----------------------------------------------------------------------------
 
-void tele_usb_disk_init() {
-    button_counter = 0;
-    long_press = false;
-
-    // disable event handlers while doing USB write
-    assign_msc_event_handlers();
-
-    // disable timers
-    default_timers_enabled = false;
-
-
-            // ARB:
-            // Include these configurations as arguments to diskmenu_init.
-            // Also let diskmenu_init return bool so that we short-circuit
-            // gracefully here???
-
-    diskmenu_set_exit_handler(tele_usb_disk_finish);
-    diskmenu_set_scratch_buffer((char *)copy_buffer, sizeof(copy_buffer));
-
-    diskmenu_init();
-}
-
 void tele_usb_disk_finish() {
     // renable teletype
     set_mode(M_LIVE);
     assign_main_event_handlers();
-    default_timers_enabled = true;
-}
-
-// ============================================================================
-//                              EVENT HANDLERS
-// ----------------------------------------------------------------------------
-
-void tele_usb_disk_handler_Front(int32_t data) {
-    if (0 == data) {
-        // button down; start timer
-        button_counter = 7;
-    }
-    else {
-        // button up; cancel timer
-        button_counter = 0;
-
-        if (long_press) {
-            long_press = false;
-            diskmenu_handle_long_press();
-        }
-        else {
-            diskmenu_handle_short_press();
-        }
-    }
-}
-
-void tele_usb_disk_handler_KeyTimer(int32_t data) {
-    // This `if` statement only stops the decrement, avoiding wraparound and or
-    // undefined behavior in the extreme case.  Arming of the long press action
-    // is triggered by passing through the value 1, and further decrements are
-    // harmless.
-
-    if (0 < button_counter) {
-        button_counter--;
-    }
-
-    // Note that we arm the long press action on 1, not 0, because the button
-    // counter is initialized to 0.  We could as easily arm on 0 and initialize
-    // to -1, which would change the stop-decrement condition slightly.
-
-    if (1 == button_counter) {
-        // long press action
-        button_counter = 0;
-        long_press = true;
-
-        diskmenu_handle_button_timeout();
-    }
-}
-
-void tele_usb_disk_PollADC(int32_t data) {
-    diskmenu_handle_PollADC();
+    diskmenu_set_default_timers_enabled(true);
 }
 
 // ============================================================================
@@ -330,7 +269,7 @@ void diskmenu_flash_write(uint8_t scene_id,
 int diskmenu_param(int last_value) {
     uint16_t adc[4];
     adc_convert(&adc);
-    uint8_t cursor = adc[1] >> 9;
+    uint8_t cursor = adc[1] >> 8;
     uint8_t deadzone = cursor & 1;
     cursor >>= 1;
     if (!deadzone || abs(cursor - last_value) > 1) {

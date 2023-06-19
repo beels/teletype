@@ -172,7 +172,7 @@ static void handler_EventTimer(int32_t data);
 static void handler_AppCustom(int32_t data);
 
 // event queue
-static void empty_event_handlers(void);
+void empty_event_handlers(void);
 void assign_main_event_handlers(void);
 void assign_msc_event_handlers(void);
 static void check_events(void);

@@ -27,11 +27,28 @@ void diskmenu_assign_msc_event_handlers() {
     //app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
 }
 
+void diskmenu_assign_advanced_menu_event_handlers(void) {
+    empty_event_handlers();
+
+    app_event_handlers[kEventPollADC] = &tele_usb_disk_PollADC;
+
+    // one day this could be used to map the front button and pot to be used as
+    // a UI with a memory stick
+
+    app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
+    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
+    app_event_handlers[kEventScreenRefresh] =
+                                          &tele_usb_disk_handler_ScreenRefresh;
+}
+
 uint8_t diskmenu_irqs_pause() {
     return 0;
 }
 
 void diskmenu_irqs_resume(uint8_t flags) {
+}
+
+void diskmenu_set_default_timers_enabled(bool value) {
 }
 
 // Subsystem control

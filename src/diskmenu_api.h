@@ -10,10 +10,16 @@
 //                        APPLICATION INFRASTRUCTURE
 // ----------------------------------------------------------------------------
 
+extern char copy_buffer[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+extern uint8_t copy_buffer_len;
+
+void empty_event_handlers(void);
 void diskmenu_assign_msc_event_handlers(void);
+void diskmenu_assign_advanced_menu_event_handlers(void);
 
 uint8_t diskmenu_irqs_pause(void);
 void diskmenu_irqs_resume(uint8_t flags);
+void diskmenu_set_default_timers_enabled(bool value);
 
 // Subsystem control
 void tele_usb_disk_finish(void);

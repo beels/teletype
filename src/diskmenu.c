@@ -24,7 +24,9 @@ static void main_menu_short_press(void);
 static void main_menu_button_timeout(void);
 static void main_menu_long_press(void);
 static void main_menu_handle_PollADC(void);
+static void main_menu_handle_screenRefresh(void);
 static void disk_browse_handle_PollADC(void);
+static void disk_browse_handle_screenRefresh(void);
 
 static void diskmenu_main_menu_init(void);
 static void diskmenu_finish(void);
@@ -49,6 +51,87 @@ static void disk_browse_navigate(int old_index, int new_index);
 
 
 static void tele_usb_disk_exec(void);
+
+// ============================================================================
+//                                 Utilities
+// ----------------------------------------------------------------------------
+
+static int button_counter = 0;
+static bool long_press = false;
+
+void tele_usb_disk_init() {
+    button_counter = 0;
+    long_press = false;
+
+    // disable event handlers while doing USB write
+    diskmenu_assign_advanced_menu_event_handlers();
+
+    // disable timers
+    diskmenu_set_default_timers_enabled(false);
+
+            // ARB:
+            // Include these configurations as arguments to diskmenu_init.
+            // Also let diskmenu_init return bool so that we short-circuit
+            // gracefully here???
+
+    diskmenu_set_exit_handler(tele_usb_disk_finish);
+
+    diskmenu_init();
+}
+
+// ============================================================================
+//                              EVENT HANDLERS
+// ----------------------------------------------------------------------------
+
+void tele_usb_disk_handler_Front(int32_t data) {
+    if (0 == data) {
+        // button down; start timer
+        button_counter = 7;
+    }
+    else {
+        // button up; cancel timer
+        button_counter = 0;
+
+        if (long_press) {
+            long_press = false;
+            diskmenu_handle_long_press();
+        }
+        else {
+            diskmenu_handle_short_press();
+        }
+    }
+}
+
+void tele_usb_disk_handler_KeyTimer(int32_t data) {
+    // This `if` statement only stops the decrement, avoiding wraparound and or
+    // undefined behavior in the extreme case.  Arming of the long press action
+    // is triggered by passing through the value 1, and further decrements are
+    // harmless.
+
+    if (0 < button_counter) {
+        button_counter--;
+    }
+
+    // Note that we arm the long press action on 1, not 0, because the button
+    // counter is initialized to 0.  We could as easily arm on 0 and initialize
+    // to -1, which would change the stop-decrement condition slightly.
+
+    if (1 == button_counter) {
+        // long press action
+        button_counter = 0;
+        long_press = true;
+
+        diskmenu_handle_button_timeout();
+    }
+}
+
+void tele_usb_disk_PollADC(int32_t data) {
+    diskmenu_handle_PollADC();
+}
+
+void tele_usb_disk_handler_ScreenRefresh(int32_t data) {
+    diskmenu_handle_ScreenRefresh();
+}
 
 // ============================================================================
 //                           SERIALIZATION SUPPORT
@@ -91,8 +174,6 @@ static int param_last_index = -1;
 
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
-static char *diskmenu_copy_buffer;
-static size_t diskmenu_copy_buffer_length;
 
 enum { kBlank = 0, kCurrent, kSelected };
 enum {
@@ -106,6 +187,7 @@ enum {
 
 static void (*diskmenu_exit_handler)(void);
 static void (*pollADC_handler)(void);
+static void (*screenRefresh_handler)(void);
 static void (*short_press_action)(void);
 static void (*button_timeout_action)(void);
 static void (*long_press_action)(void);
@@ -138,6 +220,10 @@ static void main_menu_handle_PollADC(void) {
     param_last_index = index;
 }
 
+static void main_menu_handle_screenRefresh(void) {
+    diskmenu_display_print();
+}
+
 static void disk_browse_handle_PollADC(void) {
     int index = diskmenu_param_scaled(10, param_knob_scaling);
     if (0 <= param_last_index && index != param_last_index) {
@@ -146,6 +232,10 @@ static void disk_browse_handle_PollADC(void) {
     }
 
     param_last_index = index;
+}
+
+static void disk_browse_handle_screenRefresh(void) {
+    diskmenu_display_print();
 }
 
 static
@@ -179,29 +269,19 @@ void diskmenu_set_exit_handler(void (*exit_handler)(void)) {
     diskmenu_exit_handler = exit_handler;
 }
 
-bool diskmenu_set_scratch_buffer(char *buffer, uint32_t length) {
-    if (1024 <= length) {
-        diskmenu_copy_buffer = buffer;
-        diskmenu_copy_buffer_length = length;
-
-        return true;
-    }
-
-    return false;
-}
-
 void diskmenu_init(void) {
 
     // This just keeps the PARAM knob quiet while we go through the disk access
     // operations a the start of diskmenu_init.
 
     pollADC_handler = NULL;
+    screenRefresh_handler = NULL;
 
             // ARB:
             // Why is this being done before anything else?
             // This used to be the LUN scanning code.
 
-    if (!diskmenu_copy_buffer || !diskmenu_discover_filenames()) {
+    if (!diskmenu_discover_filenames()) {
         // Exit usb disk mode
 
 
@@ -236,12 +316,19 @@ void diskmenu_handle_PollADC() {
     }
 }
 
+void diskmenu_handle_ScreenRefresh() {
+    if (screenRefresh_handler) {
+        (*screenRefresh_handler)();
+    }
+}
+
 void diskmenu_main_menu_init() {
     // initial button handlers (main menu)
     short_press_action = &main_menu_short_press;
     button_timeout_action = &main_menu_button_timeout;
     long_press_action = &main_menu_long_press;
     pollADC_handler = &main_menu_handle_PollADC;
+    screenRefresh_handler = &main_menu_handle_screenRefresh;
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
     param_last_index = -1;
 
@@ -710,6 +797,7 @@ static void diskmenu_browse_init(char *filename,
     button_timeout_action = &disk_browse_button_timeout;
     long_press_action = &disk_browse_long_press;
     pollADC_handler = &disk_browse_handle_PollADC;
+    screenRefresh_handler = &disk_browse_handle_screenRefresh;
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
@@ -728,7 +816,7 @@ static void diskmenu_browse_init(char *filename,
 
     // Create file index
     // We borrow the copy buffer for temporary storage of the file index.
-    s_file_index = (uint8_t *) diskmenu_copy_buffer;
+    s_file_index = (uint8_t *) copy_buffer;
 
     mergesort_accessor_t filename_accessor = {
                         .data = 0,
@@ -737,8 +825,8 @@ static void diskmenu_browse_init(char *filename,
 
     uint8_t temp_index[256];
     mergesort(s_file_index, temp_index,
-              diskmenu_copy_buffer + 256,
-              diskmenu_copy_buffer_length - 256,
+              ((char *) copy_buffer) + 256,
+              sizeof(copy_buffer) - 256,
               disk_browse_num_files, FNAME_BUFFER_LEN,
               &filename_accessor);
 
@@ -918,10 +1006,13 @@ static void draw_usb_menu_item(uint8_t item_num, const char* text);
 // *very* basic USB operations menu
 
 typedef enum {
-    USB_MENU_COMMAND_WRITE = 0,
-    USB_MENU_COMMAND_READ = 1,
-    USB_MENU_COMMAND_BOTH = 2,
-    USB_MENU_COMMAND_EXIT = 3,
+    USB_MENU_COMMAND_WRITE,
+    USB_MENU_COMMAND_READ,
+    USB_MENU_COMMAND_BOTH,
+    USB_MENU_COMMAND_ADVANCED,
+    USB_MENU_COMMAND_EXIT,
+
+    USB_MENU_COMMAND_COUNT
 } usb_menu_command_t;
 
 usb_menu_command_t usb_menu_command;
@@ -933,7 +1024,11 @@ void tele_usb_disk_exec() {
     uint8_t lun_state = 0;  // unused
     uint8_t lun = 0;        // unused
 
-    if (diskmenu_device_open()) {
+    if (usb_menu_command == USB_MENU_COMMAND_ADVANCED) {
+        // ARB: rename to something having to do with advanced menu.
+        tele_usb_disk_init();
+    }
+    else if (diskmenu_device_open()) {
 
         if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
             usb_menu_command == USB_MENU_COMMAND_BOTH) {
@@ -949,7 +1044,7 @@ void tele_usb_disk_exec() {
 }
 
 void draw_usb_menu_item(uint8_t item_num, const char* text) {
-    uint8_t line_num = 4 + item_num;
+    uint8_t line_num = 8 - USB_MENU_COMMAND_COUNT + item_num;
     uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
     uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
     diskmenu_display_clear(line_num, bg);
@@ -959,6 +1054,10 @@ void draw_usb_menu_item(uint8_t item_num, const char* text) {
 
 void handler_usb_PollADC(int32_t data) {
     usb_menu_command = diskmenu_param(usb_menu_command);
+
+    if (usb_menu_command >= USB_MENU_COMMAND_COUNT) {
+        usb_menu_command = USB_MENU_COMMAND_COUNT - 1;
+    }
 }
 
 void handler_usb_Front(int32_t data) {
@@ -970,18 +1069,24 @@ void handler_usb_Front(int32_t data) {
     // disable timers
     u8 flags = diskmenu_irqs_pause();
 
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_exec(); }
+    if (usb_menu_command != USB_MENU_COMMAND_EXIT) {
+        tele_usb_disk_exec();
+    }
 
-    // renable teletype
-    tele_usb_disk_finish();
+    if (usb_menu_command != USB_MENU_COMMAND_ADVANCED) {
+        // renable teletype
+        tele_usb_disk_finish();
+    }
+
     diskmenu_irqs_resume(flags);
 }
 
 void handler_usb_ScreenRefresh(int32_t data) {
-    draw_usb_menu_item(0, "WRITE TO USB");
-    draw_usb_menu_item(1, "READ FROM USB");
-    draw_usb_menu_item(2, "DO BOTH");
-    draw_usb_menu_item(3, "EXIT");
+    draw_usb_menu_item(USB_MENU_COMMAND_WRITE,    "WRITE TO USB");
+    draw_usb_menu_item(USB_MENU_COMMAND_READ,     "READ FROM USB");
+    draw_usb_menu_item(USB_MENU_COMMAND_BOTH,     "DO BOTH");
+    draw_usb_menu_item(USB_MENU_COMMAND_ADVANCED, "ADVANCED");
+    draw_usb_menu_item(USB_MENU_COMMAND_EXIT,     "EXIT");
 
     // No-op on hardware; render page in simulation.
     diskmenu_display_print();
