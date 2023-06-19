@@ -1,8 +1,18 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "diskmenu.h"
+#include "state.h"
+#include "scene_serialization.h"
 
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+
+// ============================================================================
+//                        APPLICATION INFRASTRUCTURE
+// ----------------------------------------------------------------------------
+
+void diskmenu_assign_msc_event_handlers() {
+}
 
 // ============================================================================
 //                           HARDWARE ABSTRACTION

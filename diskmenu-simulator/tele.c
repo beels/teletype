@@ -4,10 +4,12 @@
 
 #include "ops/op.h"
 
+#include "events.h"
+
 const tele_op_t *tele_ops[E_OP__LENGTH];
 const tele_mod_t *tele_mods[E_MOD__LENGTH];
 
-script_number_t turtle_get_script(scene_turtle_t* a) {
+uint8_t turtle_get_script(scene_turtle_t* a) {
     return 0;
 }
 
@@ -37,6 +39,21 @@ void tele_tr(uint8_t i, int16_t v) {
     printf("\n");
 }
 
+void tele_tr_pulse(uint8_t i, int16_t time) {
+    printf("TR PULSE i:%" PRIu8 " time:%" PRId16, i, time);
+    printf("\n");
+}
+
+void tele_tr_pulse_clear(uint8_t i) {
+    printf("TR PULSE CLEAR i:%" PRIu8, i);
+    printf("\n");
+}
+
+void tele_tr_pulse_time(uint8_t i, int16_t time) {
+    printf("TR PULSE TIME i:%" PRIu8 " time:%" PRId16, i, time);
+    printf("\n");
+}
+
 void tele_cv(uint8_t i, int16_t v, uint8_t s) {
     printf("CV  i:%" PRIu8 " v:%" PRId16 " s:%" PRIu8, i, v, s);
     printf("\n");
@@ -45,6 +62,12 @@ void tele_cv(uint8_t i, int16_t v, uint8_t s) {
 void tele_cv_slew(uint8_t i, int16_t v) {
     printf("CV_SLEW  i:%" PRIu8 " v:%" PRId16, i, v);
     printf("\n");
+}
+
+uint16_t tele_get_cv(uint8_t i) {
+    printf("CV_GET  i:%" PRIu8, i);
+    printf("\n");
+    return 0;
 }
 
 void tele_update_adc(uint8_t force) {
@@ -64,6 +87,11 @@ void tele_has_stack(bool i) {
 
 void tele_cv_off(uint8_t i, int16_t v) {
     printf("CV_OFF  i:%" PRIu8 " v:%" PRId16, i, v);
+    printf("\n");
+}
+
+void tele_cv_cal(uint8_t i, int32_t b, int32_t m) {
+    printf("CV_CAL  i:%" PRIu8 " b:%" PRId32 " m:%" PRId32, i, b, m);
     printf("\n");
 }
 
@@ -144,4 +172,36 @@ void grid_key_press(uint8_t x, uint8_t y, uint8_t z) {
     printf("\n");
 }
 
+// ============================================================================
+//                        APPLICATION INFRASTRUCTURE
+// ----------------------------------------------------------------------------
 
+void handler_None(int32_t data) {}
+
+// defined in globals.h
+void empty_event_handlers() {
+    for (size_t i = 0; i < kNumEventTypes; i++) {
+        app_event_handlers[i] = &handler_None;
+    }
+}
+
+// global array of pointers to handlers
+void (*app_event_handlers[kNumEventTypes])(s32 data) = { handler_None };
+
+#if 0
+// init event queue
+void init_events( void ) {
+}
+
+// check the queue for pending events
+// return 1 if found
+u8 event_next( event_t *e ) {
+    return 0;
+}
+
+// add event to tail of queue
+// return 1 if success
+u8 event_post( event_t *e ) {
+    return 0;
+}
+#endif

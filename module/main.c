@@ -48,6 +48,7 @@
 #include "preset_w_mode.h"
 #include "teletype.h"
 #include "teletype_io.h"
+#include "diskmenu.h"
 #include "usb_disk_mode.h"
 
 #ifdef TELETYPE_PROFILE
@@ -509,14 +510,7 @@ void handler_HidTimer(int32_t data) {
 }
 
 void handler_MscConnect(int32_t data) {
-    // disable event handlers while doing USB write
-    assign_msc_event_handlers();
-
-    // clear screen
-    for (size_t i = 0; i < 8; i++) {
-        region_fill(&line[i], 0);
-        region_draw(&line[i]);
-    }
+    tele_usb_disk();
 }
 
 void handler_Trigger(int32_t data) {

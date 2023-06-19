@@ -31,12 +31,23 @@
 #include "uhi_msc_mem.h"
 #include "usb_protocol_msc.h"
 
+// We implement this API
+#include "diskmenu_api.h"
+
 // Change to 1 to enable debug "fail" output from early test code.
 #define USB_DISK_TEST 0
 
 // Subsystem control
 static void tele_usb_disk_init(void);
 static void tele_usb_disk_finish(void);
+
+// ============================================================================
+//                        APPLICATION INFRASTRUCTURE
+// ----------------------------------------------------------------------------
+
+void diskmenu_assign_msc_event_handlers(void) {
+    assign_msc_event_handlers();
+}
 
 // ============================================================================
 //                                 Utilities
@@ -48,13 +59,6 @@ static bool long_press = false;
 // ============================================================================
 //                             Subsystem Control
 // ----------------------------------------------------------------------------
-
-// usb disk mode entry point
-void tele_usb_disk() {
-    print_dbg("\r\nusb");
-
-    tele_usb_disk_init();
-}
 
 void tele_usb_disk_init() {
     button_counter = 0;

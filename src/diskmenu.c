@@ -7,6 +7,7 @@
 #include "util.h"
 
 #include "diskmenu.h"
+#include "diskmenu_api.h"
 #include "filename.h"
 #include "mergesort.h"
 #include "scene_serialization.h"
@@ -14,7 +15,6 @@
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 // Local functions for usb filesystem serialization
-// ... temporarily exposed to support dewb minimal menu operations
 static void tele_usb_putc(void* self_data, uint8_t c);
 static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
 static uint16_t tele_usb_getc(void* self_data);
@@ -883,4 +883,17 @@ void tele_usb_disk_read_operation() {
     }
 
     diskmenu_filelist_close();
+}
+
+// Application Infrastructure
+
+// usb disk mode entry point
+void tele_usb_disk() {
+    // disable event handlers while doing USB write
+    diskmenu_assign_msc_event_handlers();
+
+    // clear screen
+    for (size_t i = 0; i < 8; i++) {
+        diskmenu_display_clear(i, 0);
+    }
 }
