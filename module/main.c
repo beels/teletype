@@ -170,6 +170,12 @@ static void handler_ScreenRefresh(int32_t data);
 static void handler_EventTimer(int32_t data);
 static void handler_AppCustom(int32_t data);
 
+// event queue
+static void empty_event_handlers(void);
+void assign_main_event_handlers(void);
+static void assign_msc_event_handlers(void);
+static void check_events(void);
+
 // key handling
 static void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
                              bool is_release);
@@ -503,8 +509,14 @@ void handler_HidTimer(int32_t data) {
 }
 
 void handler_MscConnect(int32_t data) {
-    // do USB
-    tele_usb_disk();
+    // disable event handlers while doing USB write
+    assign_msc_event_handlers();
+
+    // clear screen
+    for (size_t i = 0; i < 8; i++) {
+        region_fill(&line[i], 0);
+        region_draw(&line[i]);
+    }
 }
 
 void handler_Trigger(int32_t data) {
@@ -763,12 +775,9 @@ void assign_main_event_handlers() {
 void assign_msc_event_handlers(void) {
     empty_event_handlers();
 
-    app_event_handlers[kEventPollADC] = &tele_usb_disk_PollADC;
-
-    // one day this could be used to map the front button and pot to be used as
-    // a UI with a memory stick
-
-    app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
+    app_event_handlers[kEventFront] = &handler_usb_Front;
+    app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
+    app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
     app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
 }
 
