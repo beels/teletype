@@ -30,6 +30,17 @@ void diskmenu_handle_button_timeout(void);
 void diskmenu_handle_PollADC(void);
 
 // ============================================================================
+//                           HARDWARE NON-ABSTRACTION
+// ----------------------------------------------------------------------------
+
+// ... temporarily exposed to support dewb minimal menu operations
+
+void tele_usb_putc(void* self_data, uint8_t c);
+void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
+uint16_t tele_usb_getc(void* self_data);
+bool tele_usb_eof(void* self_data);
+
+// ============================================================================
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
 

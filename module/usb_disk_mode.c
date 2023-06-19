@@ -234,7 +234,7 @@ void handler_usb_Front(int32_t data) {
     // disable timers
     u8 flags = irqs_pause();
 
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk(); }
+    if (usb_menu_command != USB_MENU_COMMAND_EXIT) { tele_usb_disk_dewb(); }
 
     // renable teletype
     set_mode(M_LIVE);
@@ -249,11 +249,42 @@ void handler_usb_ScreenRefresh(int32_t data) {
     draw_usb_menu_item(3, "EXIT");
 }
 
-
-// usb disk mode entry point
-void tele_usb_disk() {
+void tele_usb_disk_dewb() {
     print_dbg("\r\nusb");
     uint8_t lun_state = 0;
+
+    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
+        // print_dbg("\r\nlun: ");
+        // print_dbg_ulong(lun);
+
+        // Mount drive
+        nav_drive_set(lun);
+        if (!nav_partition_mount()) {
+            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
+                // The test can not be done, if LUN is not present
+                lun_state &= ~(1 << lun);  // LUN test reseted
+                continue;
+            }
+            lun_state |= (1 << lun);  // LUN test is done.
+            print_dbg("\r\nfail");
+            // ui_test_finish(false); // Test fail
+            continue;
+        }
+        // Check if LUN has been already tested
+        if (lun_state & (1 << lun)) { continue; }
+
+        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            if (!tele_usb_disk_write_operation(&lun_state, &lun)) { continue; }
+        }
+        if (usb_menu_command == USB_MENU_COMMAND_READ ||
+            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+            tele_usb_disk_read_operation();
+        }
+
+        nav_exit();
+    }
+}
 
 bool diskmenu_device_open(void) {
     // We assume that there is one and only one available LUN, otherwise it is
@@ -558,42 +589,5 @@ int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
     }
 
     return value;
-}
-
-void tele_usb_disk_dewb() {
-    print_dbg("\r\nusb");
-    uint8_t lun_state = 0;
-
-    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
-        // print_dbg("\r\nlun: ");
-        // print_dbg_ulong(lun);
-
-        // Mount drive
-        nav_drive_set(lun);
-        if (!nav_partition_mount()) {
-            if (fs_g_status == FS_ERR_HW_NO_PRESENT) {
-                // The test can not be done, if LUN is not present
-                lun_state &= ~(1 << lun);  // LUN test reseted
-                continue;
-            }
-            lun_state |= (1 << lun);  // LUN test is done.
-            print_dbg("\r\nfail");
-            // ui_test_finish(false); // Test fail
-            continue;
-        }
-        // Check if LUN has been already tested
-        if (lun_state & (1 << lun)) { continue; }
-
-        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            if (!tele_usb_disk_write_operation(&lun_state, &lun)) { continue; }
-        }
-        if (usb_menu_command == USB_MENU_COMMAND_READ ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
-            tele_usb_disk_read_operation();
-        }
-
-        nav_exit();
-    }
 }
 

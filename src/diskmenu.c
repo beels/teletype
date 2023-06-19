@@ -14,10 +14,11 @@
 #define dbg printf("at: %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
 
 // Local functions for usb filesystem serialization
-static void tele_usb_putc(void* self_data, uint8_t c);
-static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
-static uint16_t tele_usb_getc(void* self_data);
-static bool tele_usb_eof(void* self_data);
+// ... temporarily exposed to support dewb minimal menu operations
+// static void tele_usb_putc(void* self_data, uint8_t c);
+// static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
+// static uint16_t tele_usb_getc(void* self_data);
+// static bool tele_usb_eof(void* self_data);
 
 static void main_menu_short_press(void);
 static void main_menu_button_timeout(void);
