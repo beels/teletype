@@ -184,6 +184,24 @@ bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
 void diskmenu_filelist_close(void) {
 }
 
+bool diskmenu_filelist_isdir(void) {
+    return false;
+}
+
+bool diskmenu_filelist_cd(char *output, uint8_t length) {
+    if (nav_dir_cd()) {
+        if (output) {
+            return nav_getcwd(browse_directory, FNAME_BUFFER_LEN, false);
+        }
+        else {
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
 // display
 #define DISPLAY_LINE_MAXLEN 42
 char display_lines[8][DISPLAY_LINE_MAXLEN + 1 + 5 + 1];

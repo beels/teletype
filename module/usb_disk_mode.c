@@ -168,10 +168,14 @@ bool diskmenu_device_close(void) {
     return true;
 }
 
+
+            // ARB: It looks like `num_entries` does not account for files that
+            // do not match the supported filename pattern.
+
 bool diskmenu_filelist_init(int *num_entries) {
-    if (nav_filelist_single_enable(FS_FILE)) {
+    if (nav_filelist_single_disable()) {
         if (num_entries) {
-            *num_entries = nav_filelist_nb(FS_FILE);
+            *num_entries = nav_filelist_nb(FS_FILE) + nav_filelist_nb(FS_DIR);
         }
         return true;
     }
@@ -206,6 +210,24 @@ bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
 void diskmenu_filelist_close() {
     nav_filelist_reset();
     nav_exit();
+}
+
+bool diskmenu_filelist_isdir(void) {
+    return nav_file_isdir();
+}
+
+bool diskmenu_filelist_cd(char *output, uint8_t length) {
+    if (nav_dir_cd()) {
+        if (output) {
+            return nav_getcwd(output, length, false);
+        }
+        else {
+            return true;
+        }
+    }
+    else {
+        return false;
+    }
 }
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {
