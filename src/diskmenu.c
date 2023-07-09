@@ -39,7 +39,27 @@ static void diskmenu_write_file(char *filename, int preset);
 static void diskmenu_read_file(char *filename, int preset);
 static void diskmenu_browse_init(char *filename,
                                  char *nextname,
-                                 int preset);
+                                 int   preset);
+
+static void page_select_init(char *filename,
+                             char *nextname,
+                             int   preset);
+static void page_select_button_timeout(void);
+static void page_select_handle_PollADC(void);
+static void page_select_handle_screenRefresh(void);
+static void page_select_long_press(void);
+static void page_select_short_press(void);
+static void page_select_render_line(int line, char *filename);
+static void page_select_render_page(int index);
+
+static void item_select_init(void);
+static void item_select_button_timeout(void);
+static void item_select_handle_PollADC(void);
+static void item_select_handle_screenRefresh(void);
+static void item_select_long_press(void);
+static void item_select_render_page(int page, int item);
+static void item_select_short_press(void);
+static void item_select_render_line(int line, char *filename, bool selected);
 
 
             // ARB: Need to audit and declare the disk_browse* functions.
@@ -165,6 +185,7 @@ bool tele_usb_eof(void* self_data) {
 #define DISK_BROWSE_PAGE_SIZE 7
 
 static int menu_selection = 4;
+static int page_selection = -1;
 static int param_knob_scaling = MAIN_MENU_PAGE_SIZE;
 static int param_last_index = -1;
 
@@ -790,14 +811,21 @@ static void disk_browse_long_press(void) {
 
 static void diskmenu_browse_init(char *filename,
                                  char *nextname,
-                                 int preset)
+                                 int   preset)
+{
+    page_select_init(filename, nextname, preset);
+}
+
+static void page_select_init(char *filename,
+                             char *nextname,
+                             int   preset)
 {
     // Set event handlers
-    short_press_action = &disk_browse_short_press;
-    button_timeout_action = &disk_browse_button_timeout;
-    long_press_action = &disk_browse_long_press;
-    pollADC_handler = &disk_browse_handle_PollADC;
-    screenRefresh_handler = &disk_browse_handle_screenRefresh;
+    short_press_action = &page_select_short_press;
+    button_timeout_action = &page_select_button_timeout;
+    long_press_action = &page_select_long_press;
+    pollADC_handler = &page_select_handle_PollADC;
+    screenRefresh_handler = &page_select_handle_screenRefresh;
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
@@ -805,10 +833,10 @@ static void diskmenu_browse_init(char *filename,
     }
 
     diskmenu_filelist_init(&disk_browse_num_files);
-    param_knob_scaling = disk_browse_num_files;
+    param_knob_scaling = 1 + disk_browse_num_files / 7;
     param_last_index = -1;
 
-    // render browser
+    // render wait screen display while sorting file liet
     char text_buffer[DISPLAY_BUFFER_LEN];
     itoa(disk_browse_num_files, text_buffer, 10);
     strcat(text_buffer, " files total");
@@ -831,9 +859,178 @@ static void diskmenu_browse_init(char *filename,
               &filename_accessor);
 
     // Render current page.
-    menu_selection = diskmenu_param_scaled(10, param_knob_scaling);
-    disk_browse_render_page(menu_selection);
+    page_selection = diskmenu_param_scaled(8, param_knob_scaling);
+
+            // ARB: the parameter here is not necessary
+
+    page_select_render_page(page_selection);
 }
+
+static void page_select_button_timeout(void) {
+    // No action on timeout.
+}
+
+static void page_select_handle_PollADC(void) {
+    int index = diskmenu_param_scaled(8, param_knob_scaling);
+    if (0 <= param_last_index && index != param_last_index) {
+        page_selection = index;
+
+            // ARB: the parameter here is not necessary
+
+        page_select_render_page(index);
+    }
+
+    param_last_index = index;
+}
+
+static void page_select_handle_screenRefresh(void) {
+    // Conventional call for simulator compatibility.
+    diskmenu_display_print();
+}
+
+static void page_select_long_press(void) {
+    // No long press in this mode, so long press and short press are the same.
+    page_select_short_press();
+}
+
+static void page_select_render_line(int line, char *filename) {
+    diskmenu_display_clear(line, 0);
+    diskmenu_display_set(line, 0, filename, 0x8, 0);
+}
+
+static void page_select_render_page(int index) {
+    // Render current page
+
+    int first_entry = index * DISK_BROWSE_PAGE_SIZE;
+
+    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
+        int line = 1 + i - first_entry;
+        char filename[FNAME_BUFFER_LEN];
+        if (i < disk_browse_num_files) {
+            disk_browse_read_sorted_filename(s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             i);
+            filename_ellipsis(filename, filename, 28);
+            page_select_render_line(line, filename);
+        }
+        else {
+            // render blank line.
+            memset(filename, 0, FNAME_BUFFER_LEN);
+            page_select_render_line(line, filename);
+        }
+    }
+}
+
+static void page_select_short_press(void) {
+    item_select_init();
+}
+
+static void item_select_init() {
+    // Set event handlers
+    short_press_action = &item_select_short_press;
+    button_timeout_action = &item_select_button_timeout;
+    long_press_action = &item_select_long_press;
+    pollADC_handler = &item_select_handle_PollADC;
+    screenRefresh_handler = &item_select_handle_screenRefresh;
+
+    // Calibrate param knob
+    param_knob_scaling = 7;
+    param_last_index = -1;
+
+            // ARB: Can we just call `item_select_handle_PollADC` here?
+
+    // Render current page.
+    menu_selection = diskmenu_param_scaled(5, param_knob_scaling);
+
+            // ARB: the parameters here are not necessary
+
+    item_select_render_page(page_selection, menu_selection);
+}
+
+static void item_select_button_timeout(void) {
+    // No action on timeout.
+}
+
+static void item_select_handle_PollADC(void) {
+    int index = diskmenu_param_scaled(5, param_knob_scaling);
+    if (0 <= param_last_index && index != param_last_index) {
+        menu_selection = index;
+
+            // ARB: the parameters here are not necessary
+
+        item_select_render_page(page_selection, index);
+    }
+
+    param_last_index = index;
+}
+
+static void item_select_handle_screenRefresh(void) {
+    // Conventional call for simulator compatibility.
+    diskmenu_display_print();
+}
+
+static void item_select_long_press(void) {
+    // No long press in this mode, so long press and short press are the same.
+    item_select_short_press();
+}
+
+static void item_select_render_page(int page, int item) {
+    // Render current page
+
+    int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+
+    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
+        int line = 1 + i - first_entry;
+        char filename[FNAME_BUFFER_LEN];
+        if (i < disk_browse_num_files) {
+            disk_browse_read_sorted_filename(s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             i);
+            filename_ellipsis(filename, filename, 28);
+            item_select_render_line(line, filename, i == first_entry + item);
+        }
+        else {
+            // render blank line.
+            memset(filename, 0, FNAME_BUFFER_LEN);
+            item_select_render_line(line, filename, 0);
+        }
+    }
+}
+
+static void item_select_short_press(void) {
+    // The save/load filename is the one selected.
+
+
+            // ARB:
+            // Maybe we should have menu_selection be the position in list, for
+            // consistency's sake.
+
+    disk_browse_read_sorted_filename(
+                      s_file_index,
+                      filename_buffer,
+                      FNAME_BUFFER_LEN,
+                      page_selection * DISK_BROWSE_PAGE_SIZE + menu_selection);
+
+    // We have a concrete file, so no concept of "save next in series".
+
+    nextname_buffer[0] = 0;
+
+    disk_browse_finish();
+}
+
+static void item_select_render_line(int line, char *filename, bool selected) {
+    if (selected) {
+        diskmenu_display_clear(line, 0xa);
+        diskmenu_display_set(line, 0, filename, 0, 0xa);
+    }
+    else {
+        diskmenu_display_clear(line, 0);
+        diskmenu_display_set(line, 0, filename, 0xa, 0);
+    }
+}
+
 
 // ============================================================================
 //                           USB DISK MINIMAL MENU
@@ -1089,6 +1286,11 @@ void handler_usb_ScreenRefresh(int32_t data) {
     draw_usb_menu_item(USB_MENU_COMMAND_EXIT,     "EXIT");
 
     // No-op on hardware; render page in simulation.
+    //
+    // This approach can be replaced with simply moving the 
+    // `diskmenu_display_print` code to the simulator and calling it
+    // immediately after the once-per-iteration call to the refresh handler.
+
     diskmenu_display_print();
 }
 

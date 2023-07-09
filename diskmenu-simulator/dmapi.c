@@ -99,7 +99,7 @@ bool diskmenu_io_create(uint8_t *status, char *filename) {
 
 // filesystem navigation
 int files_index = 0;
-#if 0
+#if 1
 char files[12][40] = {
     "file one-001.txt",
     "file two-001.txt",
@@ -258,7 +258,13 @@ void diskmenu_flash_read(
 }
 
 const char *diskmenu_flash_scene_text(uint8_t scene_id) {
-    return "file seven";
+    // This function returns the the title, not the full text.
+
+    static char preset_title[SCENE_TEXT_CHARS];
+
+    sprintf(preset_title, "scene title %d", scene_id);
+
+    return preset_title;
 }
 
 void diskmenu_flash_write(
