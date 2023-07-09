@@ -895,7 +895,8 @@ static void page_select_long_press(void) {
 
 static void page_select_render_line(int line, char *filename) {
     diskmenu_display_clear(line, 0);
-    diskmenu_display_set(line, 0, filename, 0x8, 0);
+    diskmenu_display_set(line, 0, filename, 0x4, 0);
+    diskmenu_display_draw(line);
 }
 
 static void page_select_render_page(int index) {
@@ -941,7 +942,8 @@ static void item_select_init() {
             // ARB: Can we just call `item_select_handle_PollADC` here?
 
     // Render current page.
-    menu_selection = diskmenu_param_scaled(5, param_knob_scaling);
+    int index = diskmenu_param_scaled(5, param_knob_scaling);
+    menu_selection = index + page_selection * DISK_BROWSE_PAGE_SIZE;
 
             // ARB: the parameters here are not necessary
 
@@ -955,11 +957,11 @@ static void item_select_button_timeout(void) {
 static void item_select_handle_PollADC(void) {
     int index = diskmenu_param_scaled(5, param_knob_scaling);
     if (0 <= param_last_index && index != param_last_index) {
-        menu_selection = index;
+        menu_selection = index + page_selection * DISK_BROWSE_PAGE_SIZE;
 
             // ARB: the parameters here are not necessary
 
-        item_select_render_page(page_selection, index);
+        item_select_render_page(page_selection, menu_selection);
     }
 
     param_last_index = index;
@@ -989,7 +991,7 @@ static void item_select_render_page(int page, int item) {
                                              FNAME_BUFFER_LEN,
                                              i);
             filename_ellipsis(filename, filename, 28);
-            item_select_render_line(line, filename, i == first_entry + item);
+            item_select_render_line(line, filename, i == item);
         }
         else {
             // render blank line.
@@ -1002,16 +1004,10 @@ static void item_select_render_page(int page, int item) {
 static void item_select_short_press(void) {
     // The save/load filename is the one selected.
 
-
-            // ARB:
-            // Maybe we should have menu_selection be the position in list, for
-            // consistency's sake.
-
-    disk_browse_read_sorted_filename(
-                      s_file_index,
-                      filename_buffer,
-                      FNAME_BUFFER_LEN,
-                      page_selection * DISK_BROWSE_PAGE_SIZE + menu_selection);
+    disk_browse_read_sorted_filename(s_file_index,
+                                     filename_buffer,
+                                     FNAME_BUFFER_LEN,
+                                     menu_selection);
 
     // We have a concrete file, so no concept of "save next in series".
 
@@ -1024,10 +1020,12 @@ static void item_select_render_line(int line, char *filename, bool selected) {
     if (selected) {
         diskmenu_display_clear(line, 0xa);
         diskmenu_display_set(line, 0, filename, 0, 0xa);
+        diskmenu_display_draw(line);
     }
     else {
         diskmenu_display_clear(line, 0);
         diskmenu_display_set(line, 0, filename, 0xa, 0);
+        diskmenu_display_draw(line);
     }
 }
 
