@@ -38,6 +38,7 @@ static void diskmenu_read_file(char *filename, int preset);
 static void diskmenu_browse_init(char *filename,
                                  char *nextname,
                                  int   preset);
+static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf);
 
 static void page_select_init(char *filename,
                              char *nextname,
@@ -686,7 +687,6 @@ static void diskmenu_browse_init(char *filename,
                                  char *nextname,
                                  int   preset)
 {
-    diskmenu_filelist_init(&disk_browse_num_files);
     strncpy(browse_directory, "/", sizeof(browse_directory));
     page_select_init(filename, nextname, preset);
 }
@@ -706,6 +706,8 @@ static void page_select_init(char *filename,
     for (size_t i = 0; i < 8; i++) {
         diskmenu_display_line(i, NULL);
     }
+
+    diskmenu_filelist_init(&disk_browse_num_files);
 
     param_knob_scaling = 1 + disk_browse_num_files / 7;
     param_last_index = -1;
@@ -897,6 +899,13 @@ static void item_select_render_page(int page, int item) {
     }
 }
 
+static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
+    int expected = strlen(base) + strlen(leaf) + 1;
+    strncat(base, leaf, length);
+    strncat(base, "/", length);
+    return expected == strlen(base);
+}
+
 static void item_select_short_press(void) {
     // The save/load filename is the one selected.
 
@@ -909,8 +918,15 @@ static void item_select_short_press(void) {
     if (diskmenu_filelist_isdir()) {
         // We have a directory, navigate in.
 
-        if (!diskmenu_filelist_cd(browse_directory, FNAME_BUFFER_LEN)) {
-            strcpy(browse_directory, "!!");
+        if (diskmenu_filelist_cd()) {
+            if (!diskmenu_append_dir(browse_directory,
+                                     FNAME_BUFFER_LEN,
+                                     filename_buffer))
+            {
+                strcpy(browse_directory, "!!");
+            }
+
+            page_select_init(filename_buffer, nextname_buffer, 0);
         }
     }
     else {

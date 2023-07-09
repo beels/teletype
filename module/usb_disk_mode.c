@@ -216,18 +216,8 @@ bool diskmenu_filelist_isdir(void) {
     return nav_file_isdir();
 }
 
-bool diskmenu_filelist_cd(char *output, uint8_t length) {
-    if (nav_dir_cd()) {
-        if (output) {
-            return nav_getcwd(output, length, false);
-        }
-        else {
-            return true;
-        }
-    }
-    else {
-        return false;
-    }
+bool diskmenu_filelist_cd() {
+    return nav_dir_cd();
 }
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {
