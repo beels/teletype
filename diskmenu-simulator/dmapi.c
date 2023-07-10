@@ -24,7 +24,6 @@ void diskmenu_assign_msc_event_handlers() {
     app_event_handlers[kEventFront] = &handler_usb_Front;
     app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
     app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
-    //app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
 }
 
 void diskmenu_assign_advanced_menu_event_handlers(void) {
@@ -36,7 +35,6 @@ void diskmenu_assign_advanced_menu_event_handlers(void) {
     // a UI with a memory stick
 
     app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
-    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
     app_event_handlers[kEventScreenRefresh] =
                                           &tele_usb_disk_handler_ScreenRefresh;
 }
@@ -189,6 +187,7 @@ bool diskmenu_filelist_isdir(void) {
 }
 
 bool diskmenu_filelist_cd(char *output, uint8_t length) {
+#if 0
     if (nav_dir_cd()) {
         if (output) {
             return nav_getcwd(browse_directory, FNAME_BUFFER_LEN, false);
@@ -200,6 +199,12 @@ bool diskmenu_filelist_cd(char *output, uint8_t length) {
     else {
         return false;
     }
+#endif
+    return false;
+}
+
+bool diskmenu_filelist_gotoparent() {
+    return false;
 }
 
 // display

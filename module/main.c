@@ -776,7 +776,6 @@ void assign_msc_event_handlers(void) {
     app_event_handlers[kEventFront] = &handler_usb_Front;
     app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
     app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
-    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
 }
 
 // app event loop

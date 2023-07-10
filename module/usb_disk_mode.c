@@ -54,7 +54,6 @@ void diskmenu_assign_advanced_menu_event_handlers(void) {
     // a UI with a memory stick
 
     app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
-    app_event_handlers[kEventKeyTimer] = &tele_usb_disk_handler_KeyTimer;
     app_event_handlers[kEventScreenRefresh] =
                                           &tele_usb_disk_handler_ScreenRefresh;
 }
@@ -221,8 +220,7 @@ bool diskmenu_filelist_cd() {
 }
 
 bool diskmenu_filelist_gotoparent(void) {
-    //return nav_dir_gotoparent();
-    return true;
+    return nav_dir_gotoparent();
 }
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {

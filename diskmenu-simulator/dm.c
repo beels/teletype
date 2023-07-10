@@ -39,8 +39,6 @@ extern char display_lines[8][43];
 enum {
     kQuit,
     kShort,
-    kLong,
-    kTimeout,
     kParam
 };
 
@@ -50,12 +48,6 @@ int parse_dm(const char *in, int *arg) {
     }
     if (0 == strcmp(in, "S\n")) {
         return kShort;
-    }
-    if (0 == strcmp(in, "L\n")) {
-        return kLong;
-    }
-    if (0 == strcmp(in, "T\n")) {
-        return kTimeout;
     }
     if (in[0] == 'P' && in[1] == ' ') {
         *arg = atoi(in + 2);
@@ -115,20 +107,6 @@ int main() {
                     (*app_event_handlers[kEventFront])(0);
                     (*app_event_handlers[kEventFront])(1);
                 } break;
-            case kLong:
-                {
-                    //printf("long\n");
-                    (*app_event_handlers[kEventFront])(0);
-                    for (int i = 0; i < 8; ++i) {
-                        (*app_event_handlers[kEventKeyTimer])(0);
-                    }
-                    (*app_event_handlers[kEventFront])(1);
-                } break;
-            // case kTimeout:
-            //     {
-            //         //printf("timeout\n");
-            //         diskmenu_handle_button_timeout();
-            //     } break;
             case kParam:
                 {
                     //printf("param: %d\n", arg);

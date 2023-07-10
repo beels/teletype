@@ -21,8 +21,6 @@ static uint16_t tele_usb_getc(void* self_data);
 static bool tele_usb_eof(void* self_data);
 
 static void main_menu_short_press(void);
-static void main_menu_button_timeout(void);
-static void main_menu_long_press(void);
 static void main_menu_handle_PollADC(void);
 static void main_menu_handle_screenRefresh(void);
 
@@ -43,28 +41,29 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf);
 static void page_select_init(char *filename,
                              char *nextname,
                              int   preset);
-static void page_select_button_timeout(void);
 static void page_select_handle_PollADC(void);
 static void page_select_handle_screenRefresh(void);
-static void page_select_long_press(void);
 static void page_select_short_press(void);
-static void page_select_render_line(int line, char *filename);
 static void page_select_render_page(int index);
 
 static void item_select_init(void);
-static void item_select_button_timeout(void);
 static void item_select_handle_PollADC(void);
 static void item_select_handle_screenRefresh(void);
-static void item_select_long_press(void);
 static void item_select_render_page(int page, int item);
 static void item_select_short_press(void);
-static void item_select_render_line(int line, char *filename, bool selected);
-
 
             // ARB: Need to audit and declare the disk_browse* functions.
 
-static bool diskmenu_discover_filenames(void);
+static void disk_browse_render_line(int      line,
+                                    char    *filename,
+                                    bool     selected,
+                                    uint8_t  fg);
+static void disk_browse_render_page(int     first_file_index,
+                                    int     page_size,
+                                    int     item,
+                                    uint8_t fg);
 
+static bool diskmenu_discover_filenames(void);
 
 static void tele_usb_disk_exec(void);
 
@@ -73,11 +72,9 @@ static void tele_usb_disk_exec(void);
 // ----------------------------------------------------------------------------
 
 static int button_counter = 0;
-static bool long_press = false;
 
 void tele_usb_disk_init() {
     button_counter = 0;
-    long_press = false;
 
     // disable event handlers while doing USB write
     diskmenu_assign_advanced_menu_event_handlers();
@@ -101,44 +98,11 @@ void tele_usb_disk_init() {
 
 void tele_usb_disk_handler_Front(int32_t data) {
     if (0 == data) {
-        // button down; start timer
-        button_counter = 7;
-    }
-    else {
-        // button up; cancel timer
-        button_counter = 0;
-
-        if (long_press) {
-            long_press = false;
-            diskmenu_handle_long_press();
-        }
-        else {
-            diskmenu_handle_short_press();
-        }
-    }
-}
-
-void tele_usb_disk_handler_KeyTimer(int32_t data) {
-    // This `if` statement only stops the decrement, avoiding wraparound and or
-    // undefined behavior in the extreme case.  Arming of the long press action
-    // is triggered by passing through the value 1, and further decrements are
-    // harmless.
-
-    if (0 < button_counter) {
-        button_counter--;
+        // Exec only on button up.
+        return;
     }
 
-    // Note that we arm the long press action on 1, not 0, because the button
-    // counter is initialized to 0.  We could as easily arm on 0 and initialize
-    // to -1, which would change the stop-decrement condition slightly.
-
-    if (1 == button_counter) {
-        // long press action
-        button_counter = 0;
-        long_press = true;
-
-        diskmenu_handle_button_timeout();
-    }
+    diskmenu_handle_short_press();
 }
 
 void tele_usb_disk_PollADC(int32_t data) {
@@ -180,6 +144,14 @@ bool tele_usb_eof(void* self_data) {
 #define MAIN_MENU_PAGE_SIZE 5
 #define DISK_BROWSE_PAGE_SIZE 7
 
+
+            // ARB:
+            // menu_selection *should* have the value of the currently-selected
+            // item among the *currently-selectable* items.  In general, that
+            // means it should be the index value returned by PollADC.  The
+            // reason to have a global variable for this value is so that it
+            // can be conveyed to the Front handler.
+
 static int menu_selection = 4;
 static int page_selection = -1;
 static int param_knob_scaling = MAIN_MENU_PAGE_SIZE;
@@ -210,8 +182,6 @@ static void (*diskmenu_exit_handler)(void);
 static void (*pollADC_handler)(void);
 static void (*screenRefresh_handler)(void);
 static void (*short_press_action)(void);
-static void (*button_timeout_action)(void);
-static void (*long_press_action)(void);
 
 static uint8_t *s_file_index;
 static int disk_browse_num_files;
@@ -247,28 +217,6 @@ static void main_menu_handle_screenRefresh(void) {
 
 static
 void main_menu_short_press() {
-    // cycle menu selection
-    diskmenu_render_menu_line(menu_selection, menu_selection + 1,
-                                   kBlank);
-
-    menu_selection = (menu_selection + 1) % 5;
-
-    if (menu_selection == kWriteNextInSeries && !nextname_buffer[0]) {
-        menu_selection = (menu_selection + 1) % 5;
-    }
-
-    diskmenu_render_menu_line(menu_selection, menu_selection + 1,
-                                   kCurrent);
-}
-
-static
-void main_menu_button_timeout() {
-    diskmenu_render_menu_line(menu_selection, menu_selection + 1,
-                                   kSelected);
-}
-
-static
-void main_menu_long_press() {
     diskmenu_exec();
 }
 
@@ -309,14 +257,6 @@ void diskmenu_handle_short_press() {
     (*short_press_action)();
 }
 
-void diskmenu_handle_long_press() {
-    (*long_press_action)();
-}
-
-void diskmenu_handle_button_timeout() {
-    (*button_timeout_action)();
-}
-
 void diskmenu_handle_PollADC() {
     if (pollADC_handler) {
         (*pollADC_handler)();
@@ -332,8 +272,6 @@ void diskmenu_handle_ScreenRefresh() {
 void diskmenu_main_menu_init() {
     // initial button handlers (main menu)
     short_press_action = &main_menu_short_press;
-    button_timeout_action = &main_menu_button_timeout;
-    long_press_action = &main_menu_long_press;
     pollADC_handler = &main_menu_handle_PollADC;
     screenRefresh_handler = &main_menu_handle_screenRefresh;
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
@@ -697,8 +635,6 @@ static void page_select_init(char *filename,
 {
     // Set event handlers
     short_press_action = &page_select_short_press;
-    button_timeout_action = &page_select_button_timeout;
-    long_press_action = &page_select_long_press;
     pollADC_handler = &page_select_handle_PollADC;
     screenRefresh_handler = &page_select_handle_screenRefresh;
 
@@ -747,10 +683,6 @@ static void page_select_init(char *filename,
     page_select_render_page(page_selection);
 }
 
-static void page_select_button_timeout(void) {
-    // No action on timeout.
-}
-
 static void page_select_handle_PollADC(void) {
     int index = diskmenu_param_scaled(8, param_knob_scaling);
     if (0 <= param_last_index && index != param_last_index) {
@@ -769,80 +701,6 @@ static void page_select_handle_screenRefresh(void) {
     diskmenu_display_print();
 }
 
-static void page_select_long_press(void) {
-    // No long press in this mode, so long press and short press are the same.
-    page_select_short_press();
-}
-
-static void page_select_render_line(int line, char *filename) {
-    diskmenu_display_clear(line, 0);
-    diskmenu_display_set(line, 0, filename, 0x4, 0);
-    diskmenu_display_draw(line);
-}
-
-static void page_select_render_page_with_parent(void) {
-    char filename[FNAME_BUFFER_LEN];
-
-    // Render parent directory entry
-    strcpy(filename, "../");
-    page_select_render_line(1, filename);
-
-    // Render items on current page
-    int num_real_items = DISK_BROWSE_PAGE_SIZE - 1;
-
-    for (int i = 0; i < num_real_items; ++i) {
-        int line = 2 + i;
-        if (i < disk_browse_num_files) {
-            disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
-                                             FNAME_BUFFER_LEN,
-                                             i);
-            if (diskmenu_filelist_isdir()) {
-                filename_ellipsis(filename, filename, 27);
-                strncat(filename, "/", FNAME_BUFFER_LEN);
-                page_select_render_line(line, filename);
-            }
-            else {
-                filename_ellipsis(filename, filename, 28);
-                page_select_render_line(line, filename);
-            }
-        }
-        else {
-            // render blank line.
-            memset(filename, 0, FNAME_BUFFER_LEN);
-            page_select_render_line(line, filename);
-        }
-    }
-}
-
-static void page_select_render_page_full(int first_entry) {
-    // Render items on current page
-    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
-        int line = 1 + i - first_entry;
-        char filename[FNAME_BUFFER_LEN];
-        if (i < disk_browse_num_files) {
-            disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
-                                             FNAME_BUFFER_LEN,
-                                             i);
-            if (diskmenu_filelist_isdir()) {
-                filename_ellipsis(filename, filename, 27);
-                strncat(filename, "/", FNAME_BUFFER_LEN);
-                page_select_render_line(line, filename);
-            }
-            else {
-                filename_ellipsis(filename, filename, 28);
-                page_select_render_line(line, filename);
-            }
-        }
-        else {
-            // render blank line.
-            memset(filename, 0, FNAME_BUFFER_LEN);
-            page_select_render_line(line, filename);
-        }
-    }
-}
-
 static void page_select_render_page(int index) {
     // Render current directory
     diskmenu_display_clear(0, 0);
@@ -851,15 +709,15 @@ static void page_select_render_page(int index) {
 
     if (0 == strcmp(browse_directory, "/")) {
         int first_entry = index * DISK_BROWSE_PAGE_SIZE;
-        page_select_render_page_full(first_entry);
+        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1, 0x4);
     }
     else if (0 < index) {
         int first_entry = index * DISK_BROWSE_PAGE_SIZE - 1;
-        page_select_render_page_full(first_entry);
+        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1, 0x4);
     }
     else {
         // First page (0) of a non-root directory
-        page_select_render_page_with_parent();
+        disk_browse_render_page(0, DISK_BROWSE_PAGE_SIZE - 1, -1, 0x4);
     }
 }
 
@@ -870,8 +728,6 @@ static void page_select_short_press(void) {
 static void item_select_init() {
     // Set event handlers
     short_press_action = &item_select_short_press;
-    button_timeout_action = &item_select_button_timeout;
-    long_press_action = &item_select_long_press;
     pollADC_handler = &item_select_handle_PollADC;
     screenRefresh_handler = &item_select_handle_screenRefresh;
 
@@ -883,25 +739,18 @@ static void item_select_init() {
 
     // Render current page.
     int index = diskmenu_param_scaled(5, param_knob_scaling);
-    menu_selection = index + page_selection * DISK_BROWSE_PAGE_SIZE;
+    menu_selection = index;
 
             // ARB: the parameters here are not necessary
 
-    item_select_render_page(page_selection, menu_selection);
-}
-
-static void item_select_button_timeout(void) {
-    // No action on timeout.
+    item_select_render_page(page_selection, index);
 }
 
 static void item_select_handle_PollADC(void) {
     int index = diskmenu_param_scaled(5, param_knob_scaling);
+    menu_selection = index;
     if (0 <= param_last_index && index != param_last_index) {
-        menu_selection = index + page_selection * DISK_BROWSE_PAGE_SIZE;
-
-            // ARB: the parameters here are not necessary
-
-        item_select_render_page(page_selection, menu_selection);
+        item_select_render_page(page_selection, index);
     }
 
     param_last_index = index;
@@ -912,91 +761,30 @@ static void item_select_handle_screenRefresh(void) {
     diskmenu_display_print();
 }
 
-static void item_select_long_press(void) {
-    // No long press in this mode, so long press and short press are the same.
-    item_select_short_press();
-}
-
-static void item_select_render_page_with_parent(int item) {
-    char filename[FNAME_BUFFER_LEN];
-
-    // Render parent directory entry
-    strcpy(filename, "../");
-    page_select_render_line(1, filename);
-
-    // Render items on current page
-    int num_real_items = DISK_BROWSE_PAGE_SIZE - 1;
-
-    for (int i = 0; i < num_real_items; ++i) {
-        int line = 2 + i;
-        if (i < disk_browse_num_files) {
-            disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
-                                             FNAME_BUFFER_LEN,
-                                             i);
-            if (diskmenu_filelist_isdir()) {
-                filename_ellipsis(filename, filename, 27);
-                strncat(filename, "/", FNAME_BUFFER_LEN);
-                item_select_render_line(line, filename, i == item);
-            }
-            else {
-                filename_ellipsis(filename, filename, 28);
-                item_select_render_line(line, filename, i == item);
-            }
-        }
-        else {
-            // render blank line.
-            memset(filename, 0, FNAME_BUFFER_LEN);
-            item_select_render_line(line, filename, 0);
-        }
-    }
-}
-
-static void item_select_render_page_full(int first_entry, int item) {
-    // Render items on current page
-    for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
-        int line = 1 + i - first_entry;
-        char filename[FNAME_BUFFER_LEN];
-        if (i < disk_browse_num_files) {
-            disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
-                                             FNAME_BUFFER_LEN,
-                                             i);
-            if (diskmenu_filelist_isdir()) {
-                filename_ellipsis(filename, filename, 27);
-                strncat(filename, "/", FNAME_BUFFER_LEN);
-                item_select_render_line(line, filename, i == item);
-            }
-            else {
-                filename_ellipsis(filename, filename, 28);
-                item_select_render_line(line, filename, i == item);
-            }
-        }
-        else {
-            // render blank line.
-            memset(filename, 0, FNAME_BUFFER_LEN);
-            item_select_render_line(line, filename, 0);
-        }
-    }
-}
-
-static void item_select_render_page(int page, int item) {
+static void item_select_render_page(int page, int index) {
     // Render current directory
     diskmenu_display_clear(0, 0);
     diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
     diskmenu_display_draw(0);
 
     if (0 == strcmp(browse_directory, "/")) {
-        int first_entry = page * DISK_BROWSE_PAGE_SIZE;
-        item_select_render_page_full(first_entry, item);
+        disk_browse_render_page(page * DISK_BROWSE_PAGE_SIZE,
+                                DISK_BROWSE_PAGE_SIZE,
+                                index,
+                                0xa);
     }
     else if (0 < page) {
-        int first_entry = page * DISK_BROWSE_PAGE_SIZE - 1;
-        item_select_render_page_full(first_entry, item);
+        disk_browse_render_page(page * DISK_BROWSE_PAGE_SIZE - 1,
+                                DISK_BROWSE_PAGE_SIZE,
+                                index,
+                                0xa);
     }
     else {
         // First page (0) of a non-root directory
-        item_select_render_page_with_parent(item);
+        disk_browse_render_page(0,
+                                DISK_BROWSE_PAGE_SIZE - 1,
+                                index,
+                                0xa);
     }
 }
 
@@ -1010,18 +798,28 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
 static void item_select_short_press(void) {
     // The save/load filename is the one selected.
 
-    if (0 == menu_selection && 0 == strcmp(browse_directory, "/"))
-    {
+    if (0 == menu_selection && 0 != strcmp(browse_directory, "/")) {
         // This is the parent directory entry.
         diskmenu_filelist_gotoparent();
+        for (int i = strlen(browse_directory) - 2;
+             browse_directory[i] != '/';
+             --i) 
+        {
+            browse_directory[i] = 0;
+        }
+        page_select_init(filename_buffer, nextname_buffer, 0);
         return;
+    }
+
+    int file_index = menu_selection + page_selection * DISK_BROWSE_PAGE_SIZE;
+    if (0 != strcmp(browse_directory, "/")) {
+        --file_index;
     }
 
     disk_browse_read_sorted_filename(s_file_index,
                                      filename_buffer,
                                      FNAME_BUFFER_LEN,
-                                     menu_selection);
-
+                                     file_index);
 
     if (diskmenu_filelist_isdir()) {
         // We have a directory, navigate in.
@@ -1046,19 +844,63 @@ static void item_select_short_press(void) {
     }
 }
 
-static void item_select_render_line(int line, char *filename, bool selected) {
+static void disk_browse_render_line(int      line,
+                                    char    *filename,
+                                    bool     selected,
+                                    uint8_t  fg)
+{
     if (selected) {
-        diskmenu_display_clear(line, 0xa);
-        diskmenu_display_set(line, 0, filename, 0, 0xa);
+        diskmenu_display_clear(line, fg);
+        diskmenu_display_set(line, 0, filename, 0, fg);
         diskmenu_display_draw(line);
     }
     else {
         diskmenu_display_clear(line, 0);
-        diskmenu_display_set(line, 0, filename, 0xa, 0);
+        diskmenu_display_set(line, 0, filename, fg, 0);
         diskmenu_display_draw(line);
     }
 }
 
+static void disk_browse_render_page(int     first_file_index,
+                                    int     page_size,
+                                    int     item,
+                                    uint8_t fg)
+{
+    char filename[FNAME_BUFFER_LEN];
+
+    if (page_size < DISK_BROWSE_PAGE_SIZE) {
+        // Render parent directory entry
+        strcpy(filename, "../");
+
+        disk_browse_render_line(1, filename, 0 == item, fg);
+    }
+
+    // Render items on current page
+    int line = 1 + DISK_BROWSE_PAGE_SIZE - page_size;
+    for (int i = first_file_index; i < first_file_index + page_size; ++i) {
+        if (i < disk_browse_num_files) {
+            disk_browse_read_sorted_filename(s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             i);
+            if (diskmenu_filelist_isdir()) {
+                filename_ellipsis(filename, filename, 27);
+                strncat(filename, "/", FNAME_BUFFER_LEN);
+                disk_browse_render_line(line, filename, line == item + 1, fg);
+            }
+            else {
+                filename_ellipsis(filename, filename, 28);
+                disk_browse_render_line(line, filename, line == item + 1, fg);
+            }
+        }
+        else {
+            // render blank line.
+            memset(filename, 0, FNAME_BUFFER_LEN);
+            disk_browse_render_line(line, filename, 0, fg);
+        }
+        ++line;
+    }
+}
 
 // ============================================================================
 //                           USB DISK MINIMAL MENU
