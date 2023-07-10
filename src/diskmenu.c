@@ -709,7 +709,12 @@ static void page_select_init(char *filename,
 
     diskmenu_filelist_init(&disk_browse_num_files);
 
-    param_knob_scaling = 1 + disk_browse_num_files / 7;
+    if (0 == strcmp(browse_directory, "/")) {
+        param_knob_scaling = 1 + disk_browse_num_files / 7;
+    }
+    else {
+        param_knob_scaling = 2 + disk_browse_num_files / 7;
+    }
     param_last_index = -1;
 
     // render wait screen display while sorting file liet
@@ -775,15 +780,43 @@ static void page_select_render_line(int line, char *filename) {
     diskmenu_display_draw(line);
 }
 
-static void page_select_render_page(int index) {
-    // Render current directory
-    diskmenu_display_clear(0, 0);
-    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
-    diskmenu_display_draw(0);
+static void page_select_render_page_with_parent(void) {
+    char filename[FNAME_BUFFER_LEN];
+
+    // Render parent directory entry
+    strcpy(filename, "../");
+    page_select_render_line(1, filename);
 
     // Render items on current page
-    int first_entry = index * DISK_BROWSE_PAGE_SIZE;
+    int num_real_items = DISK_BROWSE_PAGE_SIZE - 1;
 
+    for (int i = 0; i < num_real_items; ++i) {
+        int line = 2 + i;
+        if (i < disk_browse_num_files) {
+            disk_browse_read_sorted_filename(s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             i);
+            if (diskmenu_filelist_isdir()) {
+                filename_ellipsis(filename, filename, 27);
+                strncat(filename, "/", FNAME_BUFFER_LEN);
+                page_select_render_line(line, filename);
+            }
+            else {
+                filename_ellipsis(filename, filename, 28);
+                page_select_render_line(line, filename);
+            }
+        }
+        else {
+            // render blank line.
+            memset(filename, 0, FNAME_BUFFER_LEN);
+            page_select_render_line(line, filename);
+        }
+    }
+}
+
+static void page_select_render_page_full(int first_entry) {
+    // Render items on current page
     for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
         int line = 1 + i - first_entry;
         char filename[FNAME_BUFFER_LEN];
@@ -807,6 +840,26 @@ static void page_select_render_page(int index) {
             memset(filename, 0, FNAME_BUFFER_LEN);
             page_select_render_line(line, filename);
         }
+    }
+}
+
+static void page_select_render_page(int index) {
+    // Render current directory
+    diskmenu_display_clear(0, 0);
+    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
+    diskmenu_display_draw(0);
+
+    if (0 == strcmp(browse_directory, "/")) {
+        int first_entry = index * DISK_BROWSE_PAGE_SIZE;
+        page_select_render_page_full(first_entry);
+    }
+    else if (0 < index) {
+        int first_entry = index * DISK_BROWSE_PAGE_SIZE - 1;
+        page_select_render_page_full(first_entry);
+    }
+    else {
+        // First page (0) of a non-root directory
+        page_select_render_page_with_parent();
     }
 }
 
@@ -864,15 +917,43 @@ static void item_select_long_press(void) {
     item_select_short_press();
 }
 
-static void item_select_render_page(int page, int item) {
-    // Render current directory
-    diskmenu_display_clear(0, 0);
-    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
-    diskmenu_display_draw(0);
+static void item_select_render_page_with_parent(int item) {
+    char filename[FNAME_BUFFER_LEN];
+
+    // Render parent directory entry
+    strcpy(filename, "../");
+    page_select_render_line(1, filename);
 
     // Render items on current page
-    int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+    int num_real_items = DISK_BROWSE_PAGE_SIZE - 1;
 
+    for (int i = 0; i < num_real_items; ++i) {
+        int line = 2 + i;
+        if (i < disk_browse_num_files) {
+            disk_browse_read_sorted_filename(s_file_index,
+                                             filename,
+                                             FNAME_BUFFER_LEN,
+                                             i);
+            if (diskmenu_filelist_isdir()) {
+                filename_ellipsis(filename, filename, 27);
+                strncat(filename, "/", FNAME_BUFFER_LEN);
+                item_select_render_line(line, filename, i == item);
+            }
+            else {
+                filename_ellipsis(filename, filename, 28);
+                item_select_render_line(line, filename, i == item);
+            }
+        }
+        else {
+            // render blank line.
+            memset(filename, 0, FNAME_BUFFER_LEN);
+            item_select_render_line(line, filename, 0);
+        }
+    }
+}
+
+static void item_select_render_page_full(int first_entry, int item) {
+    // Render items on current page
     for (int i = first_entry; i < first_entry + DISK_BROWSE_PAGE_SIZE; ++i) {
         int line = 1 + i - first_entry;
         char filename[FNAME_BUFFER_LEN];
@@ -899,6 +980,26 @@ static void item_select_render_page(int page, int item) {
     }
 }
 
+static void item_select_render_page(int page, int item) {
+    // Render current directory
+    diskmenu_display_clear(0, 0);
+    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
+    diskmenu_display_draw(0);
+
+    if (0 == strcmp(browse_directory, "/")) {
+        int first_entry = page * DISK_BROWSE_PAGE_SIZE;
+        item_select_render_page_full(first_entry, item);
+    }
+    else if (0 < page) {
+        int first_entry = page * DISK_BROWSE_PAGE_SIZE - 1;
+        item_select_render_page_full(first_entry, item);
+    }
+    else {
+        // First page (0) of a non-root directory
+        item_select_render_page_with_parent(item);
+    }
+}
+
 static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
     int expected = strlen(base) + strlen(leaf) + 1;
     strncat(base, leaf, length);
@@ -908,6 +1009,13 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
 
 static void item_select_short_press(void) {
     // The save/load filename is the one selected.
+
+    if (0 == menu_selection && 0 == strcmp(browse_directory, "/"))
+    {
+        // This is the parent directory entry.
+        diskmenu_filelist_gotoparent();
+        return;
+    }
 
     disk_browse_read_sorted_filename(s_file_index,
                                      filename_buffer,

@@ -49,6 +49,7 @@ bool diskmenu_filelist_goto(char *output, int len, uint8_t index);
 void diskmenu_filelist_close(void);
 bool diskmenu_filelist_isdir(void);
 bool diskmenu_filelist_cd(void);
+bool diskmenu_filelist_gotoparent(void);
 // display
 void diskmenu_display_clear(int line_no, uint8_t bg);
 void diskmenu_display_set(int line_no,

@@ -220,6 +220,11 @@ bool diskmenu_filelist_cd() {
     return nav_dir_cd();
 }
 
+bool diskmenu_filelist_gotoparent(void) {
+    //return nav_dir_gotoparent();
+    return true;
+}
+
 void diskmenu_display_clear(int line_no, uint8_t bg) {
     region_fill(&line[line_no], bg);
 }
