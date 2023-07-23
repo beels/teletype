@@ -31,7 +31,6 @@ static void diskmenu_main_menu_init(void);
 
 static void diskmenu_exec(void);
 static bool diskmenu_parse_target_filename(char *buffer, uint8_t preset);
-static void diskmenu_render_line(char *text, int line_no, int marker);
 static void diskmenu_render_menu_line(int item, int line_no, int marker);
 static int diskmenu_write_file(char *filename, int preset);
 static int diskmenu_read_file(char *filename, int preset);
@@ -54,16 +53,9 @@ static void item_select_handle_PollADC(int32_t data);
 static void item_select_handle_screenRefresh(int32_t data);
 static void item_select_render_page(int page, int item);
 
-            // ARB: Need to audit and declare the disk_browse* functions.
-
-static void disk_browse_render_line(int      line,
-                                    char    *filename,
-                                    bool     selected,
-                                    uint8_t  fg);
 static void disk_browse_render_page(int     first_file_index,
                                     int     page_size,
-                                    int     item,
-                                    uint8_t fg);
+                                    int     item);
 
 static bool diskmenu_discover_filenames(void);
 
@@ -196,7 +188,7 @@ static char browse_directory[FNAME_BUFFER_LEN];
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
-enum { kBlank = 0, kCurrent, kSelected };
+enum { kBlank = 0, kCurrent };
 enum {
     kHelpText = -1,
     kReadFile = 0,
@@ -285,7 +277,7 @@ void diskmenu_main_menu_init() {
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        diskmenu_display_line(i, NULL);
+        diskmenu_display_line(i, NULL, false);
     }
 
     // Parse selected preset number
@@ -300,7 +292,7 @@ void diskmenu_main_menu_init() {
             // ARB:
             // Can we just use diskmenu_flash_scene_text directly here?
 
-        diskmenu_display_line(0, preset_title);
+        diskmenu_display_line(0, preset_title, false);
     }
 
     // Menu items
@@ -328,7 +320,7 @@ void diskmenu_exec() {
                 strncat(text_buffer,
                         filename_buffer,
                         DISPLAY_BUFFER_LEN - strlen(text_buffer));
-                diskmenu_display_line(0, text_buffer);
+                diskmenu_display_line(0, text_buffer, false);
             }
         } break;
         case kWriteFile: {
@@ -384,42 +376,16 @@ bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
     return true;
 }
 
-void diskmenu_render_line(char *text, int line_no, int marker) {
-    char text_buffer[DISPLAY_BUFFER_LEN];
-    u8 gutter = display_font_string_position(">", 1) + 2;
-
-    diskmenu_display_clear(line_no, 0);
-
-    if (kCurrent == marker) {
-        strcpy(text_buffer, ">");
-    }
-    else if (kSelected == marker) {
-        strcpy(text_buffer, "*");
-    }
-    else {
-        strcpy(text_buffer, " ");
-    }
-
-    diskmenu_display_set(line_no, 0, text_buffer, 0xa, 0);
-    diskmenu_display_set(line_no, gutter, text, 0xa, 0);
-
-    diskmenu_display_draw(line_no);
-}
-
 void diskmenu_render_menu_line(int item, int line_no, int marker) {
     char text_buffer[DISPLAY_BUFFER_LEN];
 
     switch (item) {
-        case kHelpText: { // Menu line 0: Read from file 'abcd.123'
-            diskmenu_render_line("PARAM: select; button: exec",
-                                      line_no, marker);
-        } break;
         case kReadFile: { // Menu line 0: Read from file 'abcd.123'
             strcpy(text_buffer, "Read '");
             filename_ellipsis(text_buffer + 6, filename_buffer, 22);
             strcat(text_buffer, "'");
 
-            diskmenu_render_line(text_buffer, line_no, marker);
+            diskmenu_display_line(line_no, text_buffer, marker);
         } break;
 
         case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
@@ -427,7 +393,7 @@ void diskmenu_render_menu_line(int item, int line_no, int marker) {
             filename_ellipsis(text_buffer + 7, filename_buffer, 21);
             strcat(text_buffer, "'");
 
-            diskmenu_render_line(text_buffer, line_no, marker);
+            diskmenu_display_line(line_no, text_buffer, marker);
         } break;
 
         case kWriteNextInSeries: { // Menu line 2: filename iterator
@@ -436,12 +402,12 @@ void diskmenu_render_menu_line(int item, int line_no, int marker) {
                 filename_ellipsis(text_buffer + 7, nextname_buffer, 21);
                 strcat(text_buffer, "'");
 
-                diskmenu_render_line(text_buffer, line_no, marker);
+                diskmenu_display_line(line_no, text_buffer, marker);
             }
         } break;
 
         case kBrowse: { // Menu line 3: Browse filesystem
-            diskmenu_render_line("Browse USB disk", line_no, marker);
+            diskmenu_display_line(line_no, "Browse USB disk", marker);
         } break;
 
         case kExit: { // Menu line 4: Exit USB disk mode
@@ -452,7 +418,7 @@ void diskmenu_render_menu_line(int item, int line_no, int marker) {
             strcpy(text_buffer, "Exit to scene ");
             strcat(text_buffer, preset_buffer);
 
-            diskmenu_render_line(text_buffer, line_no, marker);
+            diskmenu_display_line(line_no, text_buffer, marker);
         } break;
 
         default: {} break;
@@ -616,7 +582,7 @@ static void page_select_init(char *filename,
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        diskmenu_display_line(i, NULL);
+        diskmenu_display_line(i, NULL, false);
     }
 
     diskmenu_filelist_init(&disk_browse_num_files);
@@ -633,7 +599,7 @@ static void page_select_init(char *filename,
     char text_buffer[DISPLAY_BUFFER_LEN];
     itoa(disk_browse_num_files, text_buffer, 10);
     strcat(text_buffer, " files total");
-    diskmenu_render_line(text_buffer, 0, kBlank);
+    diskmenu_display_line(0, text_buffer, false);
 
     // Create file index
     // We borrow the copy buffer for temporary storage of the file index.
@@ -679,22 +645,23 @@ static void page_select_handle_screenRefresh(int32_t data) {
 
 static void page_select_render_page(int index) {
     // Render current directory
-    diskmenu_display_clear(0, 0);
-    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
-    diskmenu_display_draw(0);
+    diskmenu_display_line(0, browse_directory, false);
 
+    // Ugly, but desperately trying to save space.
+    diskmenu_foreground = 0x4;
     if (0 == strcmp(browse_directory, "/")) {
         int first_entry = index * DISK_BROWSE_PAGE_SIZE;
-        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1, 0x4);
+        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1);
     }
     else if (0 < index) {
         int first_entry = index * DISK_BROWSE_PAGE_SIZE - 1;
-        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1, 0x4);
+        disk_browse_render_page(first_entry, DISK_BROWSE_PAGE_SIZE, -1);
     }
     else {
         // First page (0) of a non-root directory
-        disk_browse_render_page(0, DISK_BROWSE_PAGE_SIZE - 1, -1, 0x4);
+        disk_browse_render_page(0, DISK_BROWSE_PAGE_SIZE - 1, -1);
     }
+    diskmenu_foreground = 0xa;
 }
 
 static void page_select_short_press(int32_t data) {
@@ -741,28 +708,23 @@ static void item_select_handle_screenRefresh(int32_t data) {
 
 static void item_select_render_page(int page, int index) {
     // Render current directory
-    diskmenu_display_clear(0, 0);
-    diskmenu_display_set(0, 0, browse_directory, 0xa, 0);
-    diskmenu_display_draw(0);
+    diskmenu_display_line(0, browse_directory, false);
 
     if (0 == strcmp(browse_directory, "/")) {
         disk_browse_render_page(page * DISK_BROWSE_PAGE_SIZE,
                                 DISK_BROWSE_PAGE_SIZE,
-                                index,
-                                0xa);
+                                index);
     }
     else if (0 < page) {
         disk_browse_render_page(page * DISK_BROWSE_PAGE_SIZE - 1,
                                 DISK_BROWSE_PAGE_SIZE,
-                                index,
-                                0xa);
+                                index);
     }
     else {
         // First page (0) of a non-root directory
         disk_browse_render_page(0,
                                 DISK_BROWSE_PAGE_SIZE - 1,
-                                index,
-                                0xa);
+                                index);
     }
 }
 
@@ -822,35 +784,15 @@ static void item_select_short_press(int32_t data) {
     }
 }
 
-static void disk_browse_render_line(int      line,
-                                    char    *filename,
-                                    bool     selected,
-                                    uint8_t  fg)
-{
-    if (selected) {
-        diskmenu_display_clear(line, fg);
-        diskmenu_display_set(line, 0, filename, 0, fg);
-        diskmenu_display_draw(line);
-    }
-    else {
-        diskmenu_display_clear(line, 0);
-        diskmenu_display_set(line, 0, filename, fg, 0);
-        diskmenu_display_draw(line);
-    }
-}
-
 static void disk_browse_render_page(int     first_file_index,
                                     int     page_size,
-                                    int     item,
-                                    uint8_t fg)
+                                    int     item)
 {
-    char filename[FNAME_BUFFER_LEN];
-
     if (page_size < DISK_BROWSE_PAGE_SIZE) {
         // Render parent directory entry
-        strcpy(filename, "../");
+        strcpy(filename_buffer, "../");
 
-        disk_browse_render_line(1, filename, 0 == item, fg);
+        diskmenu_display_line(1, filename_buffer, 0 == item);
     }
 
     // Render items on current page
@@ -858,23 +800,19 @@ static void disk_browse_render_page(int     first_file_index,
     for (int i = first_file_index; i < first_file_index + page_size; ++i) {
         if (i < disk_browse_num_files) {
             disk_browse_read_sorted_filename(s_file_index,
-                                             filename,
+                                             filename_buffer,
                                              FNAME_BUFFER_LEN,
                                              i);
+            filename_ellipsis(filename_buffer, filename_buffer, 27);
             if (nav_file_isdir()) {
-                filename_ellipsis(filename, filename, 27);
-                strncat(filename, "/", FNAME_BUFFER_LEN);
-                disk_browse_render_line(line, filename, line == item + 1, fg);
+                strncat(filename_buffer, "/", FNAME_BUFFER_LEN);
             }
-            else {
-                filename_ellipsis(filename, filename, 28);
-                disk_browse_render_line(line, filename, line == item + 1, fg);
-            }
+            diskmenu_display_line(line, filename_buffer, line == item + 1);
         }
         else {
             // render blank line.
-            memset(filename, 0, FNAME_BUFFER_LEN);
-            disk_browse_render_line(line, filename, 0, fg);
+            memset(filename_buffer, 0, FNAME_BUFFER_LEN);
+            diskmenu_display_line(line, filename_buffer, false);
         }
         ++line;
     }
@@ -891,19 +829,18 @@ bool tele_usb_disk_write_operation() {
     // WRITE SCENES
     diskmenu_dbg("\r\nwriting scenes");
 
-    char filename[13];
-    strcpy(filename, "tt00s.txt");
+    strcpy(filename_buffer, "tt00s.txt");
 
     char text_buffer[40];
     strcpy(text_buffer, "WRITE");
-    diskmenu_display_line(0, text_buffer);
+    diskmenu_display_line(0, text_buffer, false);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
-        diskmenu_display_line(0, text_buffer);
+        diskmenu_display_line(0, text_buffer, false);
 
-        int rc = diskmenu_write_file(filename, i);
+        int rc = diskmenu_write_file(filename_buffer, i);
         if (rc == -1 ) {
             diskmenu_dbg("\r\ncreate fail");
             return false;
@@ -913,12 +850,12 @@ bool tele_usb_disk_write_operation() {
             return false;
         }
 
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
+        if (filename_buffer[3] == '9') {
+            filename_buffer[3] = '0';
+            filename_buffer[2]++;
         }
         else
-            filename[3]++;
+            filename_buffer[3]++;
 
         diskmenu_dbg(".");
         if (SCENE_SLOTS - 1 == i) {
@@ -935,41 +872,40 @@ void tele_usb_disk_read_operation() {
     // READ SCENES
     diskmenu_dbg("\r\nreading scenes...");
 
-    char filename[13];
-    strcpy(filename, "tt00.txt");
+    strcpy(filename_buffer, "tt00.txt");
 
     char text_buffer[40];
     strcpy(text_buffer, "READ");
-    diskmenu_display_line(1, text_buffer);
+    diskmenu_display_line(1, text_buffer, false);
 
     diskmenu_filelist_init(NULL);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
-        diskmenu_display_line(1, text_buffer);
+        diskmenu_display_line(1, text_buffer, false);
 
 #if 1
-        diskmenu_read_file(filename, i);
+        diskmenu_read_file(filename_buffer, i);
 #else
-        int rc = diskmenu_read_file(filename, i);
+        int rc = diskmenu_read_file(filename_buffer, i);
         if (rc != -1) {
             diskmenu_dbg("\r\ncan't open");
         }
         else if (rc == -2) {
             diskmenu_dbg("\r\nnot found: ");
-            diskmenu_dbg(filename);
+            diskmenu_dbg(filename_buffer);
         }
 #endif
 
         diskmenu_filelist_goto(NULL, 0, 0);
 
-        if (filename[3] == '9') {
-            filename[3] = '0';
-            filename[2]++;
+        if (filename_buffer[3] == '9') {
+            filename_buffer[3] = '0';
+            filename_buffer[2]++;
         }
         else {
-            filename[3]++;
+            filename_buffer[3]++;
         }
     }
 
@@ -991,12 +927,9 @@ void tele_usb_disk() {
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
-        diskmenu_display_clear(i, 0);
-        diskmenu_display_draw(i);
+        diskmenu_display_line(i, "", false);
     }
 }
-
-static void draw_usb_menu_item(uint8_t item_num, const char* text);
 
 // *very* basic USB operations menu
 
@@ -1036,15 +969,6 @@ void tele_usb_disk_exec() {
     }
 }
 
-void draw_usb_menu_item(uint8_t item_num, const char* text) {
-    uint8_t line_num = 8 - USB_MENU_COMMAND_COUNT + item_num;
-    uint8_t fg = usb_menu_command == item_num ? 0 : 0xa;
-    uint8_t bg = usb_menu_command == item_num ? 0xa : 0;
-    diskmenu_display_clear(line_num, bg);
-    diskmenu_display_set(line_num, 0, text, fg, bg);
-    diskmenu_display_draw(line_num);
-}
-
 void handler_usb_PollADC(int32_t data) {
     usb_menu_command = diskmenu_param(usb_menu_command);
 
@@ -1075,11 +999,23 @@ void handler_usb_Front(int32_t data) {
 }
 
 void handler_usb_ScreenRefresh(int32_t data) {
-    draw_usb_menu_item(USB_MENU_COMMAND_WRITE,    "WRITE TO USB");
-    draw_usb_menu_item(USB_MENU_COMMAND_READ,     "READ FROM USB");
-    draw_usb_menu_item(USB_MENU_COMMAND_BOTH,     "DO BOTH");
-    draw_usb_menu_item(USB_MENU_COMMAND_ADVANCED, "ADVANCED");
-    draw_usb_menu_item(USB_MENU_COMMAND_EXIT,     "EXIT");
+    enum { kFirstLine = 8 - USB_MENU_COMMAND_COUNT };
+
+    diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_WRITE,
+                            "WRITE TO USB",
+                            usb_menu_command == USB_MENU_COMMAND_WRITE);
+    diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_READ,
+                            "READ FROM USB",
+                            usb_menu_command == USB_MENU_COMMAND_READ);
+    diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_BOTH,
+                            "DO BOTH",
+                            usb_menu_command == USB_MENU_COMMAND_BOTH);
+    diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_ADVANCED,
+                            "ADVANCED",
+                            usb_menu_command == USB_MENU_COMMAND_ADVANCED);
+    diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_EXIT,
+                            "EXIT",
+                            usb_menu_command == USB_MENU_COMMAND_EXIT);
 
     // No-op on hardware; render page in simulation.
     //

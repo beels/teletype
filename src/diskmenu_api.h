@@ -31,6 +31,7 @@ extern uint8_t fs_g_status;
 
 extern char copy_buffer[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
 extern uint8_t copy_buffer_len;
+extern uint8_t diskmenu_foreground;
 extern bool default_timers_enabled;
 
 void empty_event_handlers(void);
@@ -102,15 +103,8 @@ void irqs_resume(uint8_t flags);
 #endif
 
 // display
-void diskmenu_display_clear(int line_no, uint8_t bg);
-void diskmenu_display_set(int line_no,
-                          uint8_t offset,
-                          const char *text,
-                          uint8_t fg,
-                          uint8_t bg);
-void diskmenu_display_draw(int line_no);
 void diskmenu_display_print(void);
-void diskmenu_display_line(int line_no, const char *text);
+void diskmenu_display_line(int line_no, const char *text, bool selected);
 uint8_t display_font_string_position(const char* str, uint8_t pos);
 // flash
 uint8_t diskmenu_flash_scene_id(void);

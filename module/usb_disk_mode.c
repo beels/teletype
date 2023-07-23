@@ -37,6 +37,8 @@
 // Change to 1 to enable debug "fail" output from early test code.
 #define USB_DISK_TEST 0
 
+uint8_t diskmenu_foreground = 0xa;
+
 // ============================================================================
 //                        APPLICATION INFRASTRUCTURE
 // ----------------------------------------------------------------------------
@@ -64,33 +66,21 @@ void tele_usb_disk_finish() {
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
 
-void diskmenu_display_clear(int line_no, uint8_t bg) {
-    region_fill(&line[line_no], bg);
-}
-
-void diskmenu_display_set(int line_no,
-                          uint8_t offset,
-                          const char *text,
-                          uint8_t fg,
-                          uint8_t bg)
-{
-    font_string_region_clip(&line[line_no], text, offset + 2, 0, fg, bg);
-}
-
-void diskmenu_display_draw(int line_no) {
-    region_draw(&line[line_no]);
-}
-
 void diskmenu_display_print(void) {
     // Do nothing.  All rendering is immediate on hardware.
 }
 
-void diskmenu_display_line(int line_no, const char *text)
+void diskmenu_display_line(int line_no, const char *text, bool selected)
 {
     region_fill(&line[line_no], 0);
 
     if (text && text[0]) {
-        font_string_region_clip(&line[line_no], text, 2, 0, 0xa, 0);
+        font_string_region_clip(&line[line_no],
+                                text,
+                                2,
+                                0,
+                                selected * diskmenu_foreground,
+                                (!selected) * diskmenu_foreground);
     }
 
     region_draw(&line[line_no]);
