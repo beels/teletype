@@ -14,11 +14,12 @@ extern char copy_buffer[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
 extern uint8_t copy_buffer_len;
 
 void empty_event_handlers(void);
-void diskmenu_assign_msc_event_handlers(void);
-void diskmenu_assign_advanced_menu_event_handlers(void);
 void diskmenu_assign_handlers(void (*frontHandler)(int32_t data),
                               void (*pollHandler)(int32_t data),
                               void (*refreshHandler)(int32_t data));
+
+
+            // ARB: Which of these timer/irq function are actually needed?
 
 uint8_t diskmenu_irqs_pause(void);
 void diskmenu_irqs_resume(uint8_t flags);
@@ -35,17 +36,18 @@ void tele_usb_disk_finish(void);
 // file IO
 void diskmenu_io_close(void);
 bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode);
-     // ARB: remove after refactor
-uint16_t diskmenu_io_read_buf(uint8_t *buffer,
-                                   uint16_t u16_buf_size);
+
+            // ARB: simple redirects for tele_usb variants.  Can these be
+            // deleted?
+
 void diskmenu_io_putc(uint8_t c);
 void diskmenu_io_write_buf(uint8_t* buffer, uint16_t size);
 uint16_t diskmenu_io_getc(void);
 bool diskmenu_io_eof(void);
+
 bool diskmenu_io_create(uint8_t *status, char *filename);
 // filesystem navigation
 bool diskmenu_device_open(void);
-bool diskmenu_device_close(void);
 bool diskmenu_filelist_init(int *num_entries);
 bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern);
 bool diskmenu_filelist_goto(char *output, int len, uint8_t index);

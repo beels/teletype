@@ -83,6 +83,14 @@ void diskmenu_io_close(void) {
     file_close();
 }
 
+
+            // ARB:
+            // replace with direct access to 'file_open'  The simulator can
+            // provide the constants (arbitrarily) and a matching
+            // implementation.  We would need some conditional compilation in
+            // the api header so that the constants can come from libavr32 in
+            // the module and from dmapi.h (or similar) in the simulator.
+
 bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode)
 {
     int modes[2] = { FOPEN_MODE_R, FOPEN_MODE_W };
