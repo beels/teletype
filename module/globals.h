@@ -35,10 +35,7 @@ typedef enum {
 } tele_mode_t;
 
 // event queue
-// void empty_event_handlers(void);       // local to main.c
 void assign_main_event_handlers(void);
-void assign_msc_event_handlers(void);
-// void check_events(void);               // local to main.c
 
 // device config
 typedef struct {

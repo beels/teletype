@@ -41,21 +41,12 @@
 //                        APPLICATION INFRASTRUCTURE
 // ----------------------------------------------------------------------------
 
-void diskmenu_assign_msc_event_handlers(void) {
-    assign_msc_event_handlers();
-}
-
-void diskmenu_assign_advanced_menu_event_handlers(void) {
-    empty_event_handlers();
-
-    app_event_handlers[kEventPollADC] = &tele_usb_disk_PollADC;
-
-    // one day this could be used to map the front button and pot to be used as
-    // a UI with a memory stick
-
-    app_event_handlers[kEventFront] = &tele_usb_disk_handler_Front;
-    app_event_handlers[kEventScreenRefresh] =
-                                          &tele_usb_disk_handler_ScreenRefresh;
+void diskmenu_assign_handlers(void (*frontHandler)(int32_t data),
+                              void (*pollHandler)(int32_t data),
+                              void (*refreshHandler)(int32_t data)) {
+    app_event_handlers[kEventFront] = frontHandler;
+    app_event_handlers[kEventPollADC] = &pollHandler;
+    app_event_handlers[kEventScreenRefresh] = refreshHandler;
 }
 
 uint8_t diskmenu_irqs_pause() {

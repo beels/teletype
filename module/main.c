@@ -174,7 +174,6 @@ static void handler_AppCustom(int32_t data);
 // event queue
 void empty_event_handlers(void);
 void assign_main_event_handlers(void);
-void assign_msc_event_handlers(void);
 static void check_events(void);
 
 // key handling
@@ -763,19 +762,6 @@ void assign_main_event_handlers() {
     app_event_handlers[kEventMidiPacket] = &handler_standard_midi_packet;
     app_event_handlers[kEventSerialConnect] = &handler_SerialConnect;
     app_event_handlers[kEventSerialDisconnect] = &handler_FtdiDisconnect;
-}
-
-// defined in globals.h
-void assign_msc_event_handlers(void) {
-    empty_event_handlers();
-
-    // ARB:
-    // These handlers are distinguished from the main ones by the inserted
-    // "_usb_" tag.
-
-    app_event_handlers[kEventFront] = &handler_usb_Front;
-    app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
-    app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
 }
 
 // app event loop

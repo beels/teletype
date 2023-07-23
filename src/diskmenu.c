@@ -20,12 +20,15 @@ static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
 static uint16_t tele_usb_getc(void* self_data);
 static bool tele_usb_eof(void* self_data);
 
-static void main_menu_short_press(void);
-static void main_menu_handle_PollADC(void);
-static void main_menu_handle_screenRefresh(void);
+static void main_menu_init(void);
+static void main_menu_short_press(int32_t data);
+static void main_menu_handle_PollADC(int32_t data);
+static void main_menu_handle_screenRefresh(int32_t data);
 
 static void diskmenu_main_menu_init(void);
-static void diskmenu_finish(void);
+
+            // ARB: Can this be deleted?
+
 static void diskmenu_exec(void);
 static bool diskmenu_parse_target_filename(char *buffer, uint8_t preset);
 static bool diskmenu_iterate_filename(char *output, char *pattern);
@@ -41,16 +44,16 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf);
 static void page_select_init(char *filename,
                              char *nextname,
                              int   preset);
-static void page_select_handle_PollADC(void);
-static void page_select_handle_screenRefresh(void);
-static void page_select_short_press(void);
+static void page_select_short_press(int32_t data);
+static void page_select_handle_PollADC(int32_t data);
+static void page_select_handle_screenRefresh(int32_t data);
 static void page_select_render_page(int index);
 
 static void item_select_init(void);
-static void item_select_handle_PollADC(void);
-static void item_select_handle_screenRefresh(void);
+static void item_select_short_press(int32_t data);
+static void item_select_handle_PollADC(int32_t data);
+static void item_select_handle_screenRefresh(int32_t data);
 static void item_select_render_page(int page, int item);
-static void item_select_short_press(void);
 
             // ARB: Need to audit and declare the disk_browse* functions.
 
@@ -70,48 +73,6 @@ static void tele_usb_disk_exec(void);
 // ============================================================================
 //                                 Utilities
 // ----------------------------------------------------------------------------
-
-static int button_counter = 0;
-
-void tele_usb_disk_init() {
-    button_counter = 0;
-
-    // disable event handlers while doing USB write
-    diskmenu_assign_advanced_menu_event_handlers();
-
-    // disable timers
-    diskmenu_set_default_timers_enabled(false);
-
-            // ARB:
-            // Include these configurations as arguments to diskmenu_init.
-            // Also let diskmenu_init return bool so that we short-circuit
-            // gracefully here???
-
-    diskmenu_set_exit_handler(tele_usb_disk_finish);
-
-    diskmenu_init();
-}
-
-// ============================================================================
-//                              EVENT HANDLERS
-// ----------------------------------------------------------------------------
-
-void tele_usb_disk_handler_Front(int32_t data) {
-    if (0 == data) {
-        // Exec only on button up.
-        return;
-    }
-
-    diskmenu_handle_short_press();
-}
-
-void tele_usb_disk_PollADC(int32_t data) {
-    diskmenu_handle_PollADC();
-}
-
-void tele_usb_disk_handler_ScreenRefresh(int32_t data) {
-    diskmenu_handle_ScreenRefresh();
-}
 
 // ============================================================================
 //                           SERIALIZATION SUPPORT
@@ -178,11 +139,6 @@ enum {
     kExit
 };
 
-static void (*diskmenu_exit_handler)(void);
-static void (*pollADC_handler)(void);
-static void (*screenRefresh_handler)(void);
-static void (*short_press_action)(void);
-
 static uint8_t *s_file_index;
 static int disk_browse_num_files;
 
@@ -190,7 +146,7 @@ static int disk_browse_num_files;
 //                              EVENT HANDLERS
 // ----------------------------------------------------------------------------
 
-static void main_menu_handle_PollADC(void) {
+static void main_menu_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(10, param_knob_scaling);
 
     if (0 <= param_last_index && index != param_last_index) {
@@ -211,26 +167,26 @@ static void main_menu_handle_PollADC(void) {
     param_last_index = index;
 }
 
-static void main_menu_handle_screenRefresh(void) {
+static void main_menu_handle_screenRefresh(int32_t data) {
     diskmenu_display_print();
 }
 
-static
-void main_menu_short_press() {
-    diskmenu_exec();
+static void main_menu_short_press(int32_t data) {
+    if (data) {
+        diskmenu_exec();
+    }
 }
 
-void diskmenu_set_exit_handler(void (*exit_handler)(void)) {
-    diskmenu_exit_handler = exit_handler;
-}
-
-void diskmenu_init(void) {
+void main_menu_init() {
+    // disable event handlers while doing USB write
 
     // This just keeps the PARAM knob quiet while we go through the disk access
-    // operations a the start of diskmenu_init.
+    // operations setting up the usb disk mode menu.
 
-    pollADC_handler = NULL;
-    screenRefresh_handler = NULL;
+    empty_event_handlers();
+
+    // disable timers
+    diskmenu_set_default_timers_enabled(false);
 
             // ARB:
             // Why is this being done before anything else?
@@ -239,13 +195,12 @@ void diskmenu_init(void) {
     if (!diskmenu_discover_filenames()) {
         // Exit usb disk mode
 
-
             // ARB: need to add failure feedback on display
 
         // Clear screen; show error message
         // Pause for a second, or prompt for key press
 
-        diskmenu_finish();
+        tele_usb_disk_finish();
 
         return;
     }
@@ -253,27 +208,11 @@ void diskmenu_init(void) {
     diskmenu_main_menu_init();
 }
 
-void diskmenu_handle_short_press() {
-    (*short_press_action)();
-}
-
-void diskmenu_handle_PollADC() {
-    if (pollADC_handler) {
-        (*pollADC_handler)();
-    }
-}
-
-void diskmenu_handle_ScreenRefresh() {
-    if (screenRefresh_handler) {
-        (*screenRefresh_handler)();
-    }
-}
-
 void diskmenu_main_menu_init() {
     // initial button handlers (main menu)
-    short_press_action = &main_menu_short_press;
-    pollADC_handler = &main_menu_handle_PollADC;
-    screenRefresh_handler = &main_menu_handle_screenRefresh;
+    diskmenu_assign_handlers(&main_menu_short_press,
+                             &main_menu_handle_PollADC,
+                             &main_menu_handle_screenRefresh);
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
     param_last_index = -1;
 
@@ -307,12 +246,6 @@ void diskmenu_main_menu_init() {
 
     // Help text
     diskmenu_render_menu_line(kHelpText,          7, kBlank);
-}
-
-void diskmenu_finish(void) {
-        if (diskmenu_exit_handler) {
-            (*diskmenu_exit_handler)();
-        }
 }
 
 void diskmenu_exec() {
@@ -358,7 +291,7 @@ void diskmenu_exec() {
 
     diskmenu_filelist_close();
 
-    diskmenu_finish();
+    tele_usb_disk_finish();
 }
 
 bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
@@ -628,9 +561,9 @@ static void page_select_init(char *filename,
                              int   preset)
 {
     // Set event handlers
-    short_press_action = &page_select_short_press;
-    pollADC_handler = &page_select_handle_PollADC;
-    screenRefresh_handler = &page_select_handle_screenRefresh;
+    diskmenu_assign_handlers(&page_select_short_press,
+                             &page_select_handle_PollADC,
+                             &page_select_handle_screenRefresh);
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
@@ -677,7 +610,7 @@ static void page_select_init(char *filename,
     page_select_render_page(page_selection);
 }
 
-static void page_select_handle_PollADC(void) {
+static void page_select_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(8, param_knob_scaling);
     if (0 <= param_last_index && index != param_last_index) {
         page_selection = index;
@@ -690,7 +623,7 @@ static void page_select_handle_PollADC(void) {
     param_last_index = index;
 }
 
-static void page_select_handle_screenRefresh(void) {
+static void page_select_handle_screenRefresh(int32_t data) {
     // Conventional call for simulator compatibility.
     diskmenu_display_print();
 }
@@ -715,15 +648,17 @@ static void page_select_render_page(int index) {
     }
 }
 
-static void page_select_short_press(void) {
-    item_select_init();
+static void page_select_short_press(int32_t data) {
+    if (data) {
+        item_select_init();
+    }
 }
 
 static void item_select_init() {
     // Set event handlers
-    short_press_action = &item_select_short_press;
-    pollADC_handler = &item_select_handle_PollADC;
-    screenRefresh_handler = &item_select_handle_screenRefresh;
+    diskmenu_assign_handlers(&item_select_short_press,
+                             &item_select_handle_PollADC,
+                             &item_select_handle_screenRefresh);
 
     // Calibrate param knob
     param_knob_scaling = 7;
@@ -740,7 +675,7 @@ static void item_select_init() {
     item_select_render_page(page_selection, index);
 }
 
-static void item_select_handle_PollADC(void) {
+static void item_select_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(5, param_knob_scaling);
     menu_selection = index;
     if (0 <= param_last_index && index != param_last_index) {
@@ -750,7 +685,7 @@ static void item_select_handle_PollADC(void) {
     param_last_index = index;
 }
 
-static void item_select_handle_screenRefresh(void) {
+static void item_select_handle_screenRefresh(int32_t data) {
     // Conventional call for simulator compatibility.
     diskmenu_display_print();
 }
@@ -789,7 +724,7 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
     return expected == strlen(base);
 }
 
-static void item_select_short_press(void) {
+static void item_select_short_press(int32_t data) {
     // The save/load filename is the one selected.
 
     if (0 == menu_selection && 0 != strcmp(browse_directory, "/")) {
@@ -999,7 +934,11 @@ void tele_usb_disk_read_operation() {
 // usb disk mode entry point
 void tele_usb_disk() {
     // disable event handlers while doing USB write
-    diskmenu_assign_msc_event_handlers();
+    empty_event_handlers();
+
+    diskmenu_assign_handlers(&handler_usb_Front,
+                             &handler_usb_PollADC,
+                             &handler_usb_ScreenRefresh);
 
     // clear screen
     for (size_t i = 0; i < 8; i++) {
@@ -1033,7 +972,7 @@ void tele_usb_disk_exec() {
 
     if (usb_menu_command == USB_MENU_COMMAND_ADVANCED) {
         // ARB: rename to something having to do with advanced menu.
-        tele_usb_disk_init();
+        main_menu_init();
     }
     else if (diskmenu_device_open()) {
 

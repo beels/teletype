@@ -16,6 +16,9 @@ extern uint8_t copy_buffer_len;
 void empty_event_handlers(void);
 void diskmenu_assign_msc_event_handlers(void);
 void diskmenu_assign_advanced_menu_event_handlers(void);
+void diskmenu_assign_handlers(void (*frontHandler)(int32_t data),
+                              void (*pollHandler)(int32_t data),
+                              void (*refreshHandler)(int32_t data));
 
 uint8_t diskmenu_irqs_pause(void);
 void diskmenu_irqs_resume(uint8_t flags);
