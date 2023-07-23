@@ -1,20 +1,30 @@
 #include "mergesort.h"
 
-#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
 static char *work_buffer = 0;
 static int work_len = 0;
 
-static int mergesort_compare(const void *a_ptr, const void *b_ptr)
+// Bubble sort is expensive, but it doesn't take up much code.
+static void bsort(uint8_t *indexes, int num_items)
 {
-    uint8_t a = *(const uint8_t *) a_ptr;
-    uint8_t b = *(const uint8_t *) b_ptr;
-
-    return strncasecmp(work_buffer + (a * work_len),
-                       work_buffer + (b * work_len),
-                       work_len);
+    int swapped;
+    do {
+        swapped = 0;
+        for (int i = 1; i < num_items; ++i) {
+            // strncasecmp takes up less room than a local implementation.
+            int result = strncasecmp(work_buffer + (indexes[i - 1] * work_len),
+                                     work_buffer + (indexes[i] * work_len),
+                                     work_len);
+            if (result > 0) {
+                uint8_t temp = indexes[i];
+                indexes[i] = indexes[i - 1];
+                indexes[i - 1] = temp;
+                swapped = 1;
+            }
+        }
+    } while (swapped);
 }
 
 static void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
@@ -35,8 +45,7 @@ static void reduce_partitions(uint8_t *output_index, uint8_t *temp_index,
     }
 
     // sort work buffer
-    qsort(string_locations, num_buckets, sizeof(*string_locations),
-          mergesort_compare);
+    bsort(string_locations, num_buckets);
     for (int i = 0; i < num_buckets; ++i) {
         buckets[i] = string_locations[i] * partition_size;
     }
@@ -115,7 +124,7 @@ void mergesort(uint8_t *output_index, uint8_t *temp_index,
             temp_index[i] = i;
         }
 
-        qsort(temp_index, batch_size, sizeof(*temp_index), mergesort_compare);
+        bsort(temp_index, batch_size);
 
         for (int i = 0; i < batch_size; ++i) {
             output_index[j * max_buckets + i] =
