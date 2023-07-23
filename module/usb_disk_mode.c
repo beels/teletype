@@ -45,20 +45,8 @@ void diskmenu_assign_handlers(void (*frontHandler)(int32_t data),
                               void (*pollHandler)(int32_t data),
                               void (*refreshHandler)(int32_t data)) {
     app_event_handlers[kEventFront] = frontHandler;
-    app_event_handlers[kEventPollADC] = &pollHandler;
+    app_event_handlers[kEventPollADC] = pollHandler;
     app_event_handlers[kEventScreenRefresh] = refreshHandler;
-}
-
-uint8_t diskmenu_irqs_pause() {
-    return irqs_pause();
-}
-
-void diskmenu_irqs_resume(uint8_t flags) {
-    irqs_resume(flags);
-}
-
-void diskmenu_set_default_timers_enabled(bool value) {
-    default_timers_enabled = value;
 }
 
 // ============================================================================
@@ -69,158 +57,12 @@ void tele_usb_disk_finish() {
     // renable teletype
     set_mode(M_LIVE);
     assign_main_event_handlers();
-    diskmenu_set_default_timers_enabled(true);
+    default_timers_enabled = true;
 }
 
 // ============================================================================
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
-
-// Default (hardware) implementations of functions that are overridden in
-// diskmenu-simulator.
-
-void diskmenu_io_close(void) {
-    file_close();
-}
-
-
-            // ARB:
-            // replace with direct access to 'file_open'  The simulator can
-            // provide the constants (arbitrarily) and a matching
-            // implementation.  We would need some conditional compilation in
-            // the api header so that the constants can come from libavr32 in
-            // the module and from dmapi.h (or similar) in the simulator.
-
-bool diskmenu_io_open(uint8_t *status, uint8_t fopen_mode)
-{
-    int modes[2] = { FOPEN_MODE_R, FOPEN_MODE_W };
-
-    if (file_open(modes[fopen_mode])) {
-        return true;
-    }
-
-    if (status) {
-        *status = fs_g_status;
-    }
-
-    return false;
-}
-
-uint16_t diskmenu_io_read_buf(uint8_t *buffer, uint16_t u16_buf_size)
-{
-    return file_read_buf(buffer, u16_buf_size);
-}
-
-void diskmenu_io_putc(uint8_t c)
-{
-    file_putc(c);
-}
-
-void diskmenu_io_write_buf(uint8_t* buffer, uint16_t size)
-{
-    file_write_buf(buffer, size);
-}
-
-uint16_t diskmenu_io_getc(void) {
-    return file_getc();
-}
-
-bool diskmenu_io_eof(void) {
-    return file_eof() != 0;
-}
-
-bool diskmenu_io_create(uint8_t *status, char *filename) {
-    if (nav_file_create((FS_STRING) filename)) {
-        return true;
-    }
-
-    if (status) {
-        *status = fs_g_status == FS_ERR_FILE_EXIST ? kErrFileExists
-                                                   : kErrUnknown ;
-    }
-
-    return false;
-}
-
-bool diskmenu_device_open(void) {
-    // We assume that there is one and only one available LUN, otherwise it is
-    // not safe to iterate through all possible LUN even after we finish
-    // writing and reading scenes.
-
-    for (uint8_t lun = 0; (lun < uhi_msc_mem_get_lun()) && (lun < 8); lun++) {
-        // print_dbg("\r\nlun: ");
-        // print_dbg_ulong(lun);
-
-        // Mount drive
-        nav_drive_set(lun);
-        if (nav_partition_mount()) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool diskmenu_device_close(void) {
-    // No-op.
-    return true;
-}
-
-
-            // ARB: It looks like `num_entries` does not account for files that
-            // do not match the supported filename pattern.
-
-bool diskmenu_filelist_init(int *num_entries) {
-    if (nav_filelist_single_disable()) {
-        if (num_entries) {
-            *num_entries = nav_filelist_nb(FS_FILE) + nav_filelist_nb(FS_DIR);
-        }
-        return true;
-    }
-
-    return false;
-}
-
-bool diskmenu_filelist_find(char *output, uint8_t length, char *pattern) {
-    if (nav_filelist_findname((FS_STRING)pattern, false)
-        && nav_filelist_validpos())
-    {
-        if (output) {
-            return nav_file_getname(output, length);
-        }
-        return true;
-    }
-
-    return false;
-}
-
-bool diskmenu_filelist_goto(char *output, int length, uint8_t index) {
-    if (nav_filelist_goto(index) && nav_filelist_validpos()) {
-        if (output) {
-            return nav_file_getname(output, length);
-        }
-        return true;
-    }
-
-    return false;
-}
-
-void diskmenu_filelist_close() {
-    nav_filelist_reset();
-    nav_exit();
-}
-
-bool diskmenu_filelist_isdir(void) {
-    return nav_file_isdir();
-}
-
-bool diskmenu_filelist_cd() {
-    return nav_dir_cd();
-}
-
-bool diskmenu_filelist_gotoparent(void) {
-    return nav_dir_gotoparent();
-}
 
 void diskmenu_display_clear(int line_no, uint8_t bg) {
     region_fill(&line[line_no], bg);
