@@ -31,8 +31,8 @@ static bool diskmenu_parse_target_filename(char *buffer, uint8_t preset);
 static bool diskmenu_iterate_filename(char *output, char *pattern);
 static void diskmenu_render_line(char *text, int line_no, int marker);
 static void diskmenu_render_menu_line(int item, int line_no, int marker);
-static void diskmenu_write_file(char *filename, int preset);
-static void diskmenu_read_file(char *filename, int preset);
+static int diskmenu_write_file(char *filename, int preset);
+static int diskmenu_read_file(char *filename, int preset);
 static void diskmenu_browse_init(char *filename,
                                  char *nextname,
                                  int   preset);
@@ -317,11 +317,19 @@ void diskmenu_finish(void) {
 
 void diskmenu_exec() {
     uint8_t preset = diskmenu_flash_scene_id();
+    char text_buffer[DISPLAY_BUFFER_LEN];
 
     switch (menu_selection) {
         case kReadFile: {
             // Read from file
-            diskmenu_read_file(filename_buffer, preset);
+            int rc = diskmenu_read_file(filename_buffer, preset);
+            if (0 != rc) {
+                strcpy(text_buffer, rc == -1 ? "fail: " : "no file: ");
+                strncat(text_buffer,
+                        filename_buffer,
+                        DISPLAY_BUFFER_LEN - strlen(text_buffer));
+                diskmenu_display_line(0, text_buffer);
+            }
         } break;
         case kWriteFile: {
             // Write to file
@@ -502,7 +510,7 @@ static bool diskmenu_discover_filenames(void) {
     return true;
 }
 
-void diskmenu_write_file(char *filename, int preset) {
+int diskmenu_write_file(char *filename, int preset) {
     scene_state_t scene;
     ss_init(&scene);
 
@@ -519,11 +527,11 @@ void diskmenu_write_file(char *filename, int preset) {
             if (status == FS_LUN_WP) {
                 // Test can be done only on no write protected
                 // device
-                return;
+                return 0;
             }
             print_dbg("\r\nfail");
 #endif
-            return;
+            return -1;
         }
     }
 
@@ -536,7 +544,7 @@ void diskmenu_write_file(char *filename, int preset) {
         }
         print_dbg("\r\nfail");
 #endif
-        return;
+        return -2;
     }
 
     tt_serializer_t tele_usb_writer;
@@ -548,50 +556,36 @@ void diskmenu_write_file(char *filename, int preset) {
     serialize_scene(&tele_usb_writer, &scene, &text);
 
     diskmenu_io_close();
+
+    return 0;
 }
 
-
-            // ARB:
-            // Should return bool so that we can report success/failure on
-            // screen to the user.
-
-void diskmenu_read_file(char *filename, int preset) {
+int diskmenu_read_file(char *filename, int preset) {
     scene_state_t scene;
     ss_init(&scene);
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
     memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
 
-    if (diskmenu_filelist_find(NULL, 0, filename)) {
-        // print_dbg("\r\nfound: ");
-        // print_dbg(filename_buffer);
-        if (!diskmenu_io_open(NULL, kModeR)) {
-            char text_buffer[DISPLAY_BUFFER_LEN];
-            strcpy(text_buffer, "fail: ");
-            strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 6);
-
-            diskmenu_display_line(0, text_buffer);
-            // print_dbg("\r\ncan't open");
-        }
-        else {
-            tt_deserializer_t tele_usb_reader;
-            tele_usb_reader.read_char = &tele_usb_getc;
-            tele_usb_reader.eof = &tele_usb_eof;
-            tele_usb_reader.print_dbg = &diskmenu_dbg;
-            tele_usb_reader.data =
-                NULL;  // asf disk i/o holds state, no handles needed
-            deserialize_scene(&tele_usb_reader, &scene, &text);
-
-            diskmenu_io_close();
-            diskmenu_flash_write(preset, &scene, &text);
-        }
+    if (!diskmenu_filelist_find(NULL, 0, filename)) {
+        return -2;
     }
-    else {
-        char text_buffer[DISPLAY_BUFFER_LEN];
-        strcpy(text_buffer, "no file: ");
-        strncat(text_buffer, filename, DISPLAY_BUFFER_LEN - 9);
 
-        diskmenu_display_line(0, text_buffer);
+    if (!diskmenu_io_open(NULL, kModeR)) {
+        return -1;
     }
+
+    tt_deserializer_t tele_usb_reader;
+    tele_usb_reader.read_char = &tele_usb_getc;
+    tele_usb_reader.eof = &tele_usb_eof;
+    tele_usb_reader.print_dbg = &diskmenu_dbg;
+    tele_usb_reader.data =
+        NULL;  // asf disk i/o holds state, no handles needed
+    deserialize_scene(&tele_usb_reader, &scene, &text);
+
+    diskmenu_io_close();
+    diskmenu_flash_write(preset, &scene, &text);
+
+    return 0;
 }
 
 static bool disk_browse_read_filename(mergesort_accessor_t *dummy,
@@ -921,60 +915,19 @@ bool tele_usb_disk_write_operation(uint8_t* plun_state, uint8_t* plun) {
     diskmenu_display_line(0, text_buffer);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
         diskmenu_display_line(0, text_buffer);
 
-        diskmenu_flash_read(i, &scene, &text);
-
-        // ARB: bool diskmenu_io_create(uint8_t *status, char *filename);
-        uint8_t status = 0;
-        if (!diskmenu_io_create(&status, filename)) {
-            if (status != kErrFileExists) {
-#if USB_DISK_TEST == 1
-                if (status == FS_LUN_WP) {
-                    // Test can be done only on no write protected
-                    // device
-                    return false;
-                }
-#endif
-                *plun_state |= (1 << *plun);  // LUN test is done.
-                diskmenu_dbg("\r\ncreate fail");
-                return false;
-            }
+        int rc = diskmenu_write_file(filename, i);
+        if (rc == -1 ) {
+            diskmenu_dbg("\r\ncreate fail");
+            return false;
         }
-        diskmenu_dbg("\r\ncreate ok");
-
-        if (!diskmenu_io_open(&status, kModeW)) {
-#if USB_DISK_TEST == 1
-            if (status == FS_LUN_WP) {
-                // Test can be done only on no write protected
-                // device
-                return false;
-            }
-#endif
-            *plun_state |= (1 << *plun);  // LUN test is done.
+        else if (rc == -2) {
             diskmenu_dbg("\r\nopen fail");
             return false;
         }
-        diskmenu_dbg("\r\nopen ok");
-
-        tt_serializer_t tele_usb_writer;
-        tele_usb_writer.write_char = &tele_usb_putc;
-        tele_usb_writer.write_buffer = &tele_usb_write_buf;
-        tele_usb_writer.print_dbg = &diskmenu_dbg;
-        tele_usb_writer.data =
-            NULL;  // asf disk i/o holds state, no handles needed
-        serialize_scene(&tele_usb_writer, &scene, &text);
-
-        diskmenu_io_close();
-        *plun_state |= (1 << *plun);  // LUN test is done.
 
         if (filename[3] == '9') {
             filename[3] = '0';
@@ -1008,36 +961,22 @@ void tele_usb_disk_read_operation() {
     diskmenu_filelist_init(NULL);
 
     for (int i = 0; i < SCENE_SLOTS; i++) {
-        scene_state_t scene;
-        ss_init(&scene);
-        char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
-        memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
-
         strcat(text_buffer, ".");  // strcat is dangerous, make sure the
                                    // buffer is large enough!
         diskmenu_display_line(1, text_buffer);
-        if (diskmenu_filelist_find(NULL, 0, filename)) {
-            diskmenu_dbg("\r\nfound: ");
-            diskmenu_dbg(filename);
-            if (!diskmenu_io_open(NULL, kModeR))
-                diskmenu_dbg("\r\ncan't open");
-            else {
-                tt_deserializer_t tele_usb_reader;
-                tele_usb_reader.read_char = &tele_usb_getc;
-                tele_usb_reader.eof = &tele_usb_eof;
-                tele_usb_reader.print_dbg = &diskmenu_dbg;
-                tele_usb_reader.data =
-                    NULL;  // asf disk i/o holds state, no handles needed
-                deserialize_scene(&tele_usb_reader, &scene, &text);
 
-                diskmenu_io_close();
-                diskmenu_flash_write(i, &scene, &text);
-            }
+#if 1
+        diskmenu_read_file(filename, i);
+#else
+        int rc = diskmenu_read_file(filename, i);
+        if (rc != -1) {
+            diskmenu_dbg("\r\ncan't open");
         }
-        else {
+        else if (rc == -2) {
             diskmenu_dbg("\r\nnot found: ");
             diskmenu_dbg(filename);
         }
+#endif
 
         diskmenu_filelist_goto(NULL, 0, 0);
 
@@ -1045,8 +984,9 @@ void tele_usb_disk_read_operation() {
             filename[3] = '0';
             filename[2]++;
         }
-        else
+        else {
             filename[3]++;
+        }
     }
 
     diskmenu_filelist_close();
