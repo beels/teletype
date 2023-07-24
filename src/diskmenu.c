@@ -738,6 +738,10 @@ static bool diskmenu_append_dir(char *base, uint8_t length, char *leaf) {
 static void item_select_short_press(int32_t data) {
     // The save/load filename is the one selected.
 
+    if (!data) {
+        return;
+    }
+
     if (0 == menu_selection && 0 != strcmp(browse_directory, "/")) {
         // This is the parent directory entry.
         nav_dir_gotoparent();

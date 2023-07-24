@@ -72,15 +72,13 @@ void diskmenu_display_print(void) {
 
 void diskmenu_display_line(int line_no, const char *text, bool selected)
 {
-    region_fill(&line[line_no], 0);
+    int fg = selected ? 0 : diskmenu_foreground;
+    int bg = selected ? diskmenu_foreground : 0;
+
+    region_fill(&line[line_no], bg);
 
     if (text && text[0]) {
-        font_string_region_clip(&line[line_no],
-                                text,
-                                2,
-                                0,
-                                selected * diskmenu_foreground,
-                                (!selected) * diskmenu_foreground);
+        font_string_region_clip(&line[line_no], text, 2, 0, fg, bg);
     }
 
     region_draw(&line[line_no]);
