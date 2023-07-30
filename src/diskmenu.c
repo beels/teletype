@@ -31,7 +31,7 @@ static void diskmenu_main_menu_init(void);
 
 static void diskmenu_exec(void);
 static bool diskmenu_parse_target_filename(char *buffer, uint8_t preset);
-static void diskmenu_render_menu_line(int item, int line_no, int marker);
+static void diskmenu_render_menu_line(int item, int line_no, bool selected);
 static int diskmenu_write_file(char *filename, int preset);
 static int diskmenu_read_file(char *filename, int preset);
 static void diskmenu_browse_init(char *filename,
@@ -188,7 +188,6 @@ static char browse_directory[FNAME_BUFFER_LEN];
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
-enum { kBlank = 0, kCurrent };
 enum {
     kHelpText = -1,
     kReadFile = 0,
@@ -214,11 +213,9 @@ static void main_menu_handle_PollADC(int32_t data) {
         }
 
         // Update selected items
-        diskmenu_render_menu_line(menu_selection, menu_selection + 1,
-                                       kBlank);
+        diskmenu_render_menu_line(menu_selection, menu_selection + 1, false);
 
-        diskmenu_render_menu_line(index, index + 1,
-                                       kCurrent);
+        diskmenu_render_menu_line(index, index + 1, true);
 
         menu_selection = index;
     }
@@ -296,15 +293,15 @@ void diskmenu_main_menu_init() {
     }
 
     // Menu items
-    diskmenu_render_menu_line(kReadFile,          1, kBlank);
-    diskmenu_render_menu_line(kWriteFile,         2, kBlank);
-    diskmenu_render_menu_line(kWriteNextInSeries, 3, kBlank);
-    diskmenu_render_menu_line(kBrowse,            4, kBlank);
-    diskmenu_render_menu_line(kExit,              5, kCurrent);
+    diskmenu_render_menu_line(kReadFile,          1, false);
+    diskmenu_render_menu_line(kWriteFile,         2, false);
+    diskmenu_render_menu_line(kWriteNextInSeries, 3, false);
+    diskmenu_render_menu_line(kBrowse,            4, false);
+    diskmenu_render_menu_line(kExit,              5, true);
     menu_selection = 4;
 
     // Help text
-    diskmenu_render_menu_line(kHelpText,          7, kBlank);
+    diskmenu_render_menu_line(kHelpText,          7, false);
 }
 
 void diskmenu_exec() {
@@ -376,7 +373,7 @@ bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
     return true;
 }
 
-void diskmenu_render_menu_line(int item, int line_no, int marker) {
+void diskmenu_render_menu_line(int item, int line_no, bool selected) {
     char text_buffer[DISPLAY_BUFFER_LEN];
 
     switch (item) {
