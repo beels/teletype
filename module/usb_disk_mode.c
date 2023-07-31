@@ -66,10 +66,6 @@ void tele_usb_disk_finish() {
 //                           HARDWARE ABSTRACTION
 // ----------------------------------------------------------------------------
 
-void diskmenu_display_print(void) {
-    // Do nothing.  All rendering is immediate on hardware.
-}
-
 void diskmenu_display_line(int line_no, const char *text, bool selected)
 {
     int fg = selected ? 0 : diskmenu_foreground;
@@ -108,20 +104,6 @@ void diskmenu_flash_write(uint8_t scene_id,
                           char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS])
 {
     flash_write(scene_id, scene, text);
-}
-
-int diskmenu_param(int last_value) {
-    uint16_t adc[4];
-    adc_convert(&adc);
-    uint8_t cursor = adc[1] >> 8;
-    uint8_t deadzone = cursor & 1;
-    cursor >>= 1;
-    if (!deadzone || abs(cursor - last_value) > 1) {
-        return cursor;
-    }
-    else {
-        return last_value;
-    }
 }
 
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {

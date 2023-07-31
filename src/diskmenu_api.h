@@ -103,7 +103,6 @@ void irqs_resume(uint8_t flags);
 #endif
 
 // display
-void diskmenu_display_print(void);
 void diskmenu_display_line(int line_no, const char *text, bool selected);
 uint8_t display_font_string_position(const char* str, uint8_t pos);
 // flash
@@ -118,7 +117,6 @@ void diskmenu_flash_write(
                      scene_state_t *scene,
                      char (*text)[SCENE_TEXT_LINES][SCENE_TEXT_CHARS]);
 
-int diskmenu_param(int last_value);
 int diskmenu_param_scaled(uint8_t resolution, uint8_t scale);
 
 void diskmenu_dbg(const char *str);

@@ -252,8 +252,6 @@ static void main_menu_handle_screenRefresh(int32_t data) {
     diskmenu_display_line(6, NULL, false);
     diskmenu_display_line(7, NULL, false);
 
-    diskmenu_display_print();
-
     screen_dirty = false;
 }
 
@@ -607,8 +605,6 @@ static void page_select_handle_screenRefresh(int32_t data) {
 
     page_select_render_page(menu_selection);
 
-    diskmenu_display_print();
-
     screen_dirty = false;
 }
 
@@ -685,8 +681,6 @@ static void item_select_handle_screenRefresh(int32_t data) {
     }
 
     item_select_render_page(page_selection, menu_selection);
-
-    diskmenu_display_print();
 
     screen_dirty = false;
 }
@@ -968,14 +962,6 @@ void handler_usb_ScreenRefresh(int32_t data) {
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_EXIT,
                             "EXIT",
                             menu_selection == USB_MENU_COMMAND_EXIT);
-
-    // No-op on hardware; render page in simulation.
-    //
-    // This approach can be replaced with simply moving the 
-    // `diskmenu_display_print` code to the simulator and calling it
-    // immediately after the once-per-iteration call to the refresh handler.
-
-    diskmenu_display_print();
 
     screen_dirty = false;
 }
