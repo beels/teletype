@@ -20,9 +20,9 @@ static void tele_usb_write_buf(void* self_data, uint8_t* buffer, uint16_t size);
 static uint16_t tele_usb_getc(void* self_data);
 static bool tele_usb_eof(void* self_data);
 
+static void general_handle_PollADC(int32_t data);
 static void main_menu_init(void);
 static void main_menu_short_press(int32_t data);
-static void main_menu_handle_PollADC(int32_t data);
 static void main_menu_handle_screenRefresh(int32_t data);
 
 static void diskmenu_main_menu_init(void);
@@ -42,13 +42,11 @@ static void page_select_init(char *filename,
                              char *nextname,
                              int   preset);
 static void page_select_short_press(int32_t data);
-static void page_select_handle_PollADC(int32_t data);
 static void page_select_handle_screenRefresh(int32_t data);
 static void page_select_render_page(int index);
 
 static void item_select_init(void);
 static void item_select_short_press(int32_t data);
-static void item_select_handle_PollADC(int32_t data);
 static void item_select_handle_screenRefresh(int32_t data);
 static void item_select_render_page(int page, int item);
 
@@ -208,18 +206,6 @@ static int disk_browse_num_files;
 //                              EVENT HANDLERS
 // ----------------------------------------------------------------------------
 
-static void main_menu_handle_PollADC(int32_t data) {
-    int index = diskmenu_param_scaled(10, param_knob_scaling);
-
-    menu_selection = index;
-
-    if (index != param_last_index) {
-        screen_dirty = true;
-    }
-
-    param_last_index = index;
-}
-
 static void main_menu_handle_screenRefresh(int32_t data) {
     if (!screen_dirty) {
         return;
@@ -313,7 +299,7 @@ void main_menu_init() {
 void diskmenu_main_menu_init() {
     // initial button handlers (main menu)
     diskmenu_assign_handlers(&main_menu_short_press,
-                             &main_menu_handle_PollADC,
+                             &general_handle_PollADC,
                              &main_menu_handle_screenRefresh);
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
 
@@ -323,7 +309,7 @@ void diskmenu_main_menu_init() {
     // Print selected preset title
     strcpy(s_preset_title, diskmenu_flash_scene_text(preset));
 
-    param_last_index = diskmenu_param_scaled(10, param_knob_scaling);
+    param_last_index = diskmenu_param_scaled(6, param_knob_scaling);
     menu_selection = param_last_index;
 
     screen_dirty = true;
@@ -554,7 +540,7 @@ static void page_select_init(char *filename,
 
     // Set event handlers
     diskmenu_assign_handlers(&page_select_short_press,
-                             &page_select_handle_PollADC,
+                             &general_handle_PollADC,
                              &page_select_handle_screenRefresh);
 
     // clear screen
@@ -596,16 +582,16 @@ static void page_select_init(char *filename,
     default_timers_enabled = true;
 
     // Render current page.
-    param_last_index = diskmenu_param_scaled(8, param_knob_scaling);
-    page_selection = param_last_index;
+    param_last_index = diskmenu_param_scaled(6, param_knob_scaling);
+    menu_selection = param_last_index;
 
     screen_dirty = true;
 }
 
-static void page_select_handle_PollADC(int32_t data) {
-    int index = diskmenu_param_scaled(8, param_knob_scaling);
+static void general_handle_PollADC(int32_t data) {
+    int index = diskmenu_param_scaled(6, param_knob_scaling);
 
-    page_selection = index;
+    menu_selection = index;
 
     if (index != param_last_index) {
         screen_dirty = true;
@@ -619,7 +605,7 @@ static void page_select_handle_screenRefresh(int32_t data) {
         return;
     }
 
-    page_select_render_page(page_selection);
+    page_select_render_page(menu_selection);
 
     diskmenu_display_print();
 
@@ -679,29 +665,18 @@ static void page_select_short_press(int32_t data) {
 static void item_select_init() {
     // Set event handlers
     diskmenu_assign_handlers(&item_select_short_press,
-                             &item_select_handle_PollADC,
+                             &general_handle_PollADC,
                              &item_select_handle_screenRefresh);
 
     // Calibrate param knob
     param_knob_scaling = 7;
 
     // Render current page.
-    param_last_index = diskmenu_param_scaled(5, param_knob_scaling);
+    param_last_index = diskmenu_param_scaled(6, param_knob_scaling);
+    page_selection = menu_selection;
     menu_selection = param_last_index;
 
     screen_dirty = true;
-}
-
-static void item_select_handle_PollADC(int32_t data) {
-    int index = diskmenu_param_scaled(5, param_knob_scaling);
-
-    menu_selection = index;
-
-    if (index != param_last_index) {
-        screen_dirty = true;
-    }
-
-    param_last_index = index;
 }
 
 static void item_select_handle_screenRefresh(int32_t data) {
@@ -896,21 +871,9 @@ void tele_usb_disk_read_operation() {
 //                           USB DISK MINIMAL MENU
 // ----------------------------------------------------------------------------
 
-// usb disk mode entry point
-void tele_usb_disk() {
-    // disable event handlers while doing USB write
-    empty_event_handlers();
-
-    diskmenu_assign_handlers(&handler_usb_Front,
-                             &handler_usb_PollADC,
-                             &handler_usb_ScreenRefresh);
-
-    screen_dirty = true;
-}
-
 // *very* basic USB operations menu
 
-typedef enum {
+enum {
     USB_MENU_COMMAND_WRITE,
     USB_MENU_COMMAND_READ,
     USB_MENU_COMMAND_BOTH,
@@ -918,44 +881,43 @@ typedef enum {
     USB_MENU_COMMAND_EXIT,
 
     USB_MENU_COMMAND_COUNT
-} usb_menu_command_t;
+};
 
-usb_menu_command_t usb_menu_command;
+// usb disk mode entry point
+void tele_usb_disk() {
+    // disable event handlers while doing USB write
+    empty_event_handlers();
+
+    param_knob_scaling = USB_MENU_COMMAND_COUNT;
+    diskmenu_assign_handlers(&handler_usb_Front,
+                             &general_handle_PollADC,
+                             &handler_usb_ScreenRefresh);
+
+    screen_dirty = true;
+}
 
 // usb disk mode execution
 
 void tele_usb_disk_exec() {
     //print_dbg("\r\nusb");
 
-    if (usb_menu_command == USB_MENU_COMMAND_ADVANCED) {
+    if (menu_selection == USB_MENU_COMMAND_ADVANCED) {
         // ARB: rename to something having to do with advanced menu.
         main_menu_init();
     }
     else if (diskmenu_device_open()) {
 
-        if (usb_menu_command == USB_MENU_COMMAND_WRITE ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+        if (menu_selection == USB_MENU_COMMAND_WRITE ||
+            menu_selection == USB_MENU_COMMAND_BOTH) {
             tele_usb_disk_write_operation();
         }
-        if (usb_menu_command == USB_MENU_COMMAND_READ ||
-            usb_menu_command == USB_MENU_COMMAND_BOTH) {
+        if (menu_selection == USB_MENU_COMMAND_READ ||
+            menu_selection == USB_MENU_COMMAND_BOTH) {
             tele_usb_disk_read_operation();
         }
 
         diskmenu_filelist_close();
     }
-}
-
-void handler_usb_PollADC(int32_t data) {
-    int old_command = usb_menu_command;
-
-    usb_menu_command = diskmenu_param(usb_menu_command);
-
-    if (usb_menu_command >= USB_MENU_COMMAND_COUNT) {
-        usb_menu_command = USB_MENU_COMMAND_COUNT - 1;
-    }
-
-    screen_dirty = usb_menu_command != old_command;
 }
 
 void handler_usb_Front(int32_t data) {
@@ -967,11 +929,11 @@ void handler_usb_Front(int32_t data) {
     // disable timers
     u8 flags = irqs_pause();
 
-    if (usb_menu_command != USB_MENU_COMMAND_EXIT) {
+    if (menu_selection != USB_MENU_COMMAND_EXIT) {
         tele_usb_disk_exec();
     }
 
-    if (usb_menu_command != USB_MENU_COMMAND_ADVANCED) {
+    if (menu_selection != USB_MENU_COMMAND_ADVANCED) {
         // renable teletype
         tele_usb_disk_finish();
     }
@@ -993,19 +955,19 @@ void handler_usb_ScreenRefresh(int32_t data) {
 
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_WRITE,
                             "WRITE TO USB",
-                            usb_menu_command == USB_MENU_COMMAND_WRITE);
+                            menu_selection == USB_MENU_COMMAND_WRITE);
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_READ,
                             "READ FROM USB",
-                            usb_menu_command == USB_MENU_COMMAND_READ);
+                            menu_selection == USB_MENU_COMMAND_READ);
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_BOTH,
                             "DO BOTH",
-                            usb_menu_command == USB_MENU_COMMAND_BOTH);
+                            menu_selection == USB_MENU_COMMAND_BOTH);
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_ADVANCED,
                             "ADVANCED",
-                            usb_menu_command == USB_MENU_COMMAND_ADVANCED);
+                            menu_selection == USB_MENU_COMMAND_ADVANCED);
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_EXIT,
                             "EXIT",
-                            usb_menu_command == USB_MENU_COMMAND_EXIT);
+                            menu_selection == USB_MENU_COMMAND_EXIT);
 
     // No-op on hardware; render page in simulation.
     //

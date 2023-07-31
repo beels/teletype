@@ -158,11 +158,11 @@ int diskmenu_param_scaled(uint8_t resolution, uint8_t scale) {
     uint16_t deadzone = value & 1;
     value >>= 1;
 
-    if (deadzone || abs(value - last_knob) < 2) {
-        value = last_knob;
+    if (!deadzone || abs(value - last_knob) > 1) {
+        last_knob = value;
     }
     else {
-        last_knob = value;
+        value = last_knob;
     }
 
     // Now scale the value, which right now is at knob resolution.
