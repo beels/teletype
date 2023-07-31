@@ -31,7 +31,6 @@ static void diskmenu_main_menu_init(void);
 
 static void diskmenu_exec(void);
 static bool diskmenu_parse_target_filename(char *buffer, uint8_t preset);
-static void diskmenu_render_menu_line(int item, int line_no, bool selected);
 static int diskmenu_write_file(char *filename, int preset);
 static int diskmenu_read_file(char *filename, int preset);
 static void diskmenu_browse_init(char *filename,
@@ -178,6 +177,7 @@ static int param_knob_scaling = MAIN_MENU_PAGE_SIZE;
 static int param_last_index = -1;
 
 
+static bool screen_dirty = false;
 static int browse_depth = 0;
 static char browse_directory[FNAME_BUFFER_LEN];
 
@@ -187,6 +187,7 @@ static char browse_directory[FNAME_BUFFER_LEN];
             // - browse_directory has to persist across directory navigation
             //   so it requires storage outside of the copy_buffer.
 
+static char s_preset_title[DISPLAY_BUFFER_LEN];
 static char filename_buffer[FNAME_BUFFER_LEN];
 static char nextname_buffer[FNAME_BUFFER_LEN];
 
@@ -210,24 +211,64 @@ static int disk_browse_num_files;
 static void main_menu_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(10, param_knob_scaling);
 
-    if (0 <= param_last_index && index != param_last_index) {
-        if (index == kWriteNextInSeries && !nextname_buffer[0]) {
-            return;
-        }
+    menu_selection = index;
 
-        // Update selected items
-        diskmenu_render_menu_line(menu_selection, menu_selection + 1, false);
-
-        diskmenu_render_menu_line(index, index + 1, true);
-
-        menu_selection = index;
+    if (index != param_last_index) {
+        screen_dirty = true;
     }
 
     param_last_index = index;
 }
 
 static void main_menu_handle_screenRefresh(int32_t data) {
+    if (!screen_dirty) {
+        return;
+    }
+
+    diskmenu_display_line(0, s_preset_title, false);
+
+    // Menu items
+    char text_buffer[DISPLAY_BUFFER_LEN];
+
+    if (filename_buffer[0]) {
+        strcpy(text_buffer, "Read '");
+        filename_ellipsis(text_buffer + 6, filename_buffer, 22);
+        strcat(text_buffer, "'");
+
+        diskmenu_display_line(1, text_buffer, menu_selection == 0);
+
+        strcpy(text_buffer, "Write '");
+        filename_ellipsis(text_buffer + 7, filename_buffer, 21);
+        strcat(text_buffer, "'");
+
+        diskmenu_display_line(2, text_buffer, menu_selection == 1);
+    }
+    else {
+        diskmenu_display_line(1, NULL, false);
+        diskmenu_display_line(2, NULL, false);
+    }
+
+    if (nextname_buffer[0]) {
+        strcpy(text_buffer, "Write '");
+        filename_ellipsis(text_buffer + 7, nextname_buffer, 21);
+        strcat(text_buffer, "'");
+
+        diskmenu_display_line(3, text_buffer, menu_selection == 2);
+    }
+    else {
+        diskmenu_display_line(3, NULL, false);
+    }
+
+    diskmenu_display_line(4, "Browse USB disk", menu_selection == 3);
+
+    diskmenu_display_line(5, "Exit USB Disk Menu", menu_selection == 4);
+
+    diskmenu_display_line(6, NULL, false);
+    diskmenu_display_line(7, NULL, false);
+
     diskmenu_display_print();
+
+    screen_dirty = false;
 }
 
 static void main_menu_short_press(int32_t data) {
@@ -244,7 +285,7 @@ void main_menu_init() {
 
     empty_event_handlers();
 
-    // disable timers
+    // disable timers; these drive the refresh events
     default_timers_enabled = false;
 
             // ARB:
@@ -264,6 +305,8 @@ void main_menu_init() {
         return;
     }
 
+    default_timers_enabled = true;
+
     diskmenu_main_menu_init();
 }
 
@@ -273,39 +316,17 @@ void diskmenu_main_menu_init() {
                              &main_menu_handle_PollADC,
                              &main_menu_handle_screenRefresh);
     param_knob_scaling = MAIN_MENU_PAGE_SIZE;
-    param_last_index = -1;
-
-    // clear screen
-    for (size_t i = 0; i < 8; i++) {
-        diskmenu_display_line(i, NULL, false);
-    }
 
     // Parse selected preset number
     uint8_t preset = diskmenu_flash_scene_id();
 
     // Print selected preset title
-    {
-        char preset_title[DISPLAY_BUFFER_LEN];
-        strcpy(preset_title, diskmenu_flash_scene_text(preset));
+    strcpy(s_preset_title, diskmenu_flash_scene_text(preset));
 
+    param_last_index = diskmenu_param_scaled(10, param_knob_scaling);
+    menu_selection = param_last_index;
 
-            // ARB:
-            // Can we just use diskmenu_flash_scene_text directly here?
-
-        diskmenu_display_line(0, preset_title, false);
-    }
-
-    // Menu items
-    diskmenu_render_menu_line(kReadFile,          1, false);
-    diskmenu_render_menu_line(kWriteFile,         2, false);
-    diskmenu_render_menu_line(kWriteNextInSeries, 3, false);
-    diskmenu_render_menu_line(kBrowse,            4, false);
-    diskmenu_render_menu_line(kExit,              5, false);
-
-    menu_selection = 4;
-    // force sync with param knob position
-    param_last_index = 9000;
-    main_menu_handle_PollADC(0);
+    screen_dirty = true;
 }
 
 void diskmenu_exec() {
@@ -375,55 +396,6 @@ bool diskmenu_parse_target_filename(char *buffer, uint8_t preset) {
     }
     buffer[strlen(temp_filename)] = 0;
     return true;
-}
-
-void diskmenu_render_menu_line(int item, int line_no, bool selected) {
-    char text_buffer[DISPLAY_BUFFER_LEN];
-
-    switch (item) {
-        case kReadFile: { // Menu line 0: Read from file 'abcd.123'
-            strcpy(text_buffer, "Read '");
-            filename_ellipsis(text_buffer + 6, filename_buffer, 22);
-            strcat(text_buffer, "'");
-
-            diskmenu_display_line(line_no, text_buffer, selected);
-        } break;
-
-        case kWriteFile: { // Menu line 1: Write to file 'abcd.123'
-            strcpy(text_buffer, "Write '");
-            filename_ellipsis(text_buffer + 7, filename_buffer, 21);
-            strcat(text_buffer, "'");
-
-            diskmenu_display_line(line_no, text_buffer, selected);
-        } break;
-
-        case kWriteNextInSeries: { // Menu line 2: filename iterator
-            if (nextname_buffer[0]) {
-                strcpy(text_buffer, "Write '");
-                filename_ellipsis(text_buffer + 7, nextname_buffer, 21);
-                strcat(text_buffer, "'");
-
-                diskmenu_display_line(line_no, text_buffer, selected);
-            }
-        } break;
-
-        case kBrowse: { // Menu line 3: Browse filesystem
-            diskmenu_display_line(line_no, "Browse USB disk", selected);
-        } break;
-
-        case kExit: { // Menu line 4: Exit USB disk mode
-            uint8_t preset = diskmenu_flash_scene_id();
-            char preset_buffer[3];
-            itoa(preset, preset_buffer, 10);
-
-            strcpy(text_buffer, "Exit to scene ");
-            strcat(text_buffer, preset_buffer);
-
-            diskmenu_display_line(line_no, text_buffer, selected);
-        } break;
-
-        default: {} break;
-    }
 }
 
 static bool diskmenu_discover_filenames(void) {
@@ -578,6 +550,8 @@ static void page_select_init(char *filename,
                              char *nextname,
                              int   preset)
 {
+    default_timers_enabled = false;
+
     // Set event handlers
     diskmenu_assign_handlers(&page_select_short_press,
                              &page_select_handle_PollADC,
@@ -596,7 +570,6 @@ static void page_select_init(char *filename,
     else {
         param_knob_scaling = 2 + disk_browse_num_files / 7;
     }
-    param_last_index = -1;
 
     // render wait screen display while sorting file liet
     char text_buffer[DISPLAY_BUFFER_LEN];
@@ -620,36 +593,43 @@ static void page_select_init(char *filename,
               disk_browse_num_files, FNAME_BUFFER_LEN,
               &filename_accessor);
 
+    default_timers_enabled = true;
+
     // Render current page.
-    page_selection = diskmenu_param_scaled(8, param_knob_scaling);
+    param_last_index = diskmenu_param_scaled(8, param_knob_scaling);
+    page_selection = param_last_index;
 
-            // ARB: the parameter here is not necessary
-
-    page_select_render_page(page_selection);
+    screen_dirty = true;
 }
 
 static void page_select_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(8, param_knob_scaling);
-    if (0 <= param_last_index && index != param_last_index) {
-        page_selection = index;
 
-            // ARB: the parameter here is not necessary
+    page_selection = index;
 
-        page_select_render_page(index);
+    if (index != param_last_index) {
+        screen_dirty = true;
     }
 
     param_last_index = index;
 }
 
 static void page_select_handle_screenRefresh(int32_t data) {
-    // Conventional call for simulator compatibility.
+    if (!screen_dirty) {
+        return;
+    }
+
+    page_select_render_page(page_selection);
+
     diskmenu_display_print();
+
+    screen_dirty = false;
 }
 
 static void page_select_render_page(int index) {
     // Store filenames in temp buffer.
     // We borrow more of the copy buffer for storage.
-    s_page_text = copy_buffer + 256;
+    s_page_text = ((char *) copy_buffer) + 256;
 
     int has_parent = 0 == index && browse_depth;
 
@@ -704,32 +684,36 @@ static void item_select_init() {
 
     // Calibrate param knob
     param_knob_scaling = 7;
-    param_last_index = -1;
-
-            // ARB: Can we just call `item_select_handle_PollADC` here?
 
     // Render current page.
-    int index = diskmenu_param_scaled(5, param_knob_scaling);
-    menu_selection = index;
+    param_last_index = diskmenu_param_scaled(5, param_knob_scaling);
+    menu_selection = param_last_index;
 
-            // ARB: the parameters here are not necessary
-
-    item_select_render_page(page_selection, index);
+    screen_dirty = true;
 }
 
 static void item_select_handle_PollADC(int32_t data) {
     int index = diskmenu_param_scaled(5, param_knob_scaling);
+
     menu_selection = index;
-    if (0 <= param_last_index && index != param_last_index) {
-        item_select_render_page(page_selection, index);
+
+    if (index != param_last_index) {
+        screen_dirty = true;
     }
 
     param_last_index = index;
 }
 
 static void item_select_handle_screenRefresh(int32_t data) {
-    // Conventional call for simulator compatibility.
+    if (!screen_dirty) {
+        return;
+    }
+
+    item_select_render_page(page_selection, menu_selection);
+
     diskmenu_display_print();
+
+    screen_dirty = false;
 }
 
 static void item_select_render_page(int page, int index) {
@@ -921,10 +905,7 @@ void tele_usb_disk() {
                              &handler_usb_PollADC,
                              &handler_usb_ScreenRefresh);
 
-    // clear screen
-    for (size_t i = 0; i < 8; i++) {
-        diskmenu_display_line(i, "", false);
-    }
+    screen_dirty = true;
 }
 
 // *very* basic USB operations menu
@@ -966,11 +947,15 @@ void tele_usb_disk_exec() {
 }
 
 void handler_usb_PollADC(int32_t data) {
+    int old_command = usb_menu_command;
+
     usb_menu_command = diskmenu_param(usb_menu_command);
 
     if (usb_menu_command >= USB_MENU_COMMAND_COUNT) {
         usb_menu_command = USB_MENU_COMMAND_COUNT - 1;
     }
+
+    screen_dirty = usb_menu_command != old_command;
 }
 
 void handler_usb_Front(int32_t data) {
@@ -995,7 +980,16 @@ void handler_usb_Front(int32_t data) {
 }
 
 void handler_usb_ScreenRefresh(int32_t data) {
+    if (!screen_dirty) {
+        return;
+    }
+
     enum { kFirstLine = 8 - USB_MENU_COMMAND_COUNT };
+
+    // clear screen
+    for (size_t i = 0; i < kFirstLine; i++) {
+        diskmenu_display_line(i, NULL, false);
+    }
 
     diskmenu_display_line(kFirstLine + USB_MENU_COMMAND_WRITE,
                             "WRITE TO USB",
@@ -1020,5 +1014,7 @@ void handler_usb_ScreenRefresh(int32_t data) {
     // immediately after the once-per-iteration call to the refresh handler.
 
     diskmenu_display_print();
+
+    screen_dirty = false;
 }
 
